@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vector Ray Trace: Cassegrain + Toroidal M3</title>
+    <!-- Import Plotly via CDN -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #00bcd4;
+            --accent-hover: #00acc1;
+            --error-color: #cf6679;
+            --success-color: #03dac6;
+            --border-color: #333;
+            --input-bg: #2d2d2d;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color); }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        .sidebar {
+            width: 360px;
+            background-color: var(--panel-color);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #050505;
+            position: relative;
+        }
+
+        h1 { margin: 0 0 5px 0; font-size: 1.2rem; color: var(--accent-color); letter-spacing: 0.5px; }
+        h2 { margin: 0 0 20px 0; font-size: 0.8rem; opacity: 0.6; font-weight: normal; text-transform: uppercase; }
+
+        .section-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #888;
+            margin-top: 15px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 2px;
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .input-group { margin-bottom: 8px; }
+        .input-group label { display: block; font-size: 0.75rem; margin-bottom: 4px; color: #aaa; }
+        .input-group input {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: 1px solid #444;
+            color: #fff;
+            padding: 6px 8px;
+            border-radius: 3px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            box-sizing: border-box;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+        .input-group input:focus { outline: none; border-color: var(--accent-color); background-color: #383838; }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--accent-color);
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            cursor: pointer;
+            margin-top: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        button:hover { background-color: var(--accent-hover); transform: translateY(-1px); }
+        button:active { transform: translateY(1px); }
+
+        .results-panel {
+            margin-top: 20px;
+            background-color: #252525;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 3px solid var(--accent-color);
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+        }
+
+        .metric-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .metric-label { color: #888; }
+        .metric-val { color: #fff; font-weight: bold; }
+        .val-good { color: var(--success-color); }
+        .val-bad { color: var(--error-color); }
+        .val-info { color: var(--accent-color); }
+
+        #plotDiv { width: 100%; height: 100%; }
+
+        .status-bar {
+            padding: 5px 10px;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            font-size: 0.75rem;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .tooltip {
+            font-size: 0.7rem; color: #666; margin-top: 5px; font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <header>
+        <h1>Cassegrain Optimiser</h1>
+        <h2>3D Vector Ray Trace Engine</h2>
+    </header>
+
+    <div class="section-header">Primary Mirror (M1)</div>
+    <div class="input-grid">
+        <div class="input-group"><label>Diameter (mm)</label><input type="number" id="m1_dia" value="600"></div>
+        <div class="input-group"><label>Radius (neg)</label><input type="number" id="m1_roc" value="-2447.7"></div>
+    </div>
+    <div class="input-group"><label>Conic (k)</label><input type="number" id="m1_k" value="-1"></div>
+
+    <div class="section-header">Secondary Mirror (M2)</div>
+    <div class="input-grid">
+        <div class="input-group"><label>Radius (neg)</label><input type="number" id="m2_roc" value="-272.2"></div>
+        <div class="input-group"><label>Conic (k)</label><input type="number" id="m2_k" value="-1.4336"></div>
+    </div>
+    <div class="input-group"><label>Dist. from M1 (mm)</label><input type="number" id="d1" value="1100"></div>
+
+    <div class="section-header">Fold Mirror (M3) - Toroid</div>
+    <div class="input-grid">
+        <div class="input-group"><label>Dist. Behind M1 (mm)</label><input type="number" id="m3_back" value="100"></div>
+        <div class="input-group"><label>Target BFL (mm)</label><input type="number" id="target_bfl" value="100"></div>
+    </div>
+    
+    <div class="section-header">Settings</div>
+    <div class="input-grid">
+        <div class="input-group">
+            <label>Ray Density</label>
+            <input type="range" id="ray_density" min="3" max="25" value="7" style="width:100%">
+        </div>
+        <div class="input-group">
+            <label>Ray Extension (mm)</label>
+            <input type="range" id="ray_len" min="0" max="500" value="50" step="10" style="width:100%">
+        </div>
+    </div>
+
+    <button onclick="runOptimization()">Run Solver</button>
+
+    <div class="results-panel" id="results">
+        <div style="text-align:center; color:#555;">Waiting for trace...</div>
+    </div>
+    <div class="tooltip">
+        *Effective F# sensitivity improved via local NA calculation.
+    </div>
+</div>
+
+<div class="main-content">
+    <div id="plotDiv"></div>
+    <div class="status-bar">
+        <span id="status-msg">System Ready</span>
+        <span>Version 2.9 (Corrected Orientation)</span>
+    </div>
+</div>
+
+<script>
+/**
+ * 3D VECTOR MATH LIBRARY
+ */
+class Vec3 {
+    constructor(x, y, z) { this.x = x; this.y = y; this.z = z; }
+    static zero() { return new Vec3(0,0,0); }
+    
+    add(v) { return new Vec3(this.x + v.x, this.y + v.y, this.z + v.z); }
+    sub(v) { return new Vec3(this.x - v.x, this.y - v.y, this.z - v.z); }
+    mul(s) { return new Vec3(this.x * s, this.y * s, this.z * s); }
+    dot(v) { return this.x * v.x + this.y * v.y + this.z * v.z; }
+    cross(v) { 
+        return new Vec3(
+            this.y * v.z - this.z * v.y,
+            this.z * v.x - this.x * v.z,
+            this.x * v.y - this.y * v.x
+        );
+    }
+    mag() { return Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z); }
+    normalize() {
+        const m = this.mag();
+        return m === 0 ? Vec3.zero() : this.mul(1/m);
+    }
+}
+
+class Ray {
+    constructor(origin, dir) {
+        this.p = origin; 
+        this.k = dir.normalize(); 
+    }
+    propagate(distance) { return this.p.add(this.k.mul(distance)); }
+}
+
+class ConicSurface {
+    constructor(z_vertex, R, K, aperture) {
+        this.z0 = z_vertex;
+        this.R = R;
+        this.K = K;
+        this.ap = aperture;
+        this.c = R !== 0 ? 1/R : 0;
+    }
+
+    intersect(ray) {
+        const p_loc = ray.p.sub(new Vec3(0,0,this.z0));
+        const k = ray.k;
+        const F = (1 + this.K) * this.c;
+        const A = this.c*(k.x*k.x + k.y*k.y) + F*k.z*k.z;
+        const B = 2*this.c*(p_loc.x*k.x + p_loc.y*k.y) + 2*F*p_loc.z*k.z - 2*k.z;
+        const C = this.c*(p_loc.x*p_loc.x + p_loc.y*p_loc.y) + F*p_loc.z*p_loc.z - 2*p_loc.z;
+        
+        let t = 0;
+        if (Math.abs(A) < 1e-9) {
+            t = -C/B;
+        } else {
+            const disc = B*B - 4*A*C;
+            if (disc < 0) return null;
+            const t1 = (-B - Math.sqrt(disc)) / (2*A);
+            const t2 = (-B + Math.sqrt(disc)) / (2*A);
+            t = (t1 > 1e-5) ? t1 : t2;
+        }
+        
+        const hit = ray.propagate(t);
+        const hit_local = hit.sub(new Vec3(0,0,this.z0));
+        const r2 = hit_local.x*hit_local.x + hit_local.y*hit_local.y;
+        if (r2 > (this.ap/2)*(this.ap/2)) return null; 
+        
+        const nx = -this.c * hit_local.x;
+        const ny = -this.c * hit_local.y;
+        const nz = 1 - (this.K + 1) * this.c * hit_local.z;
+        const norm = new Vec3(nx, ny, nz).normalize();
+        
+        const dot = ray.k.dot(norm);
+        const k_prime = ray.k.sub(norm.mul(2*dot));
+        return { point: hit, normal: norm, out_dir: k_prime, dist: t };
+    }
+}
+
+class TiltedToroid {
+    constructor(z_center, Rt, Rs, angleDeg) {
+        this.z0 = z_center;
+        this.Rt = Rt; 
+        this.Rs = Rs; 
+        this.tilt = angleDeg * Math.PI / 180;
+        this.cosT = Math.cos(this.tilt);
+        this.sinT = Math.sin(this.tilt);
+    }
+    
+    // Logic for concave-down profile matching a +45 reflection from +Z to -Y
+    toLocal(p) {
+        const dz = p.z - this.z0;
+        // Standard coordinate rotation for tilted surface
+        const y_loc = p.y * this.cosT - dz * this.sinT;
+        const z_loc = p.y * this.sinT + dz * this.cosT;
+        return new Vec3(p.x, y_loc, z_loc);
+    }
+    
+    toGlobalVec(v) {
+        const y_g = v.y * this.cosT + v.z * this.sinT;
+        const z_g = -v.y * this.sinT + v.z * this.cosT;
+        return new Vec3(v.x, y_g, z_g);
+    }
+
+    intersect(ray) {
+        const n_plane = new Vec3(0, Math.sin(this.tilt), Math.cos(this.tilt));
+        const denom = ray.k.dot(n_plane);
+        if (Math.abs(denom) < 1e-6) return null;
+        
+        const vec_to_plane = new Vec3(0, 0, this.z0).sub(ray.p);
+        let t_curr = vec_to_plane.dot(n_plane) / denom;
+        
+        const Cx = 1/this.Rs;
+        const Cy = 1/this.Rt;
+        
+        for(let i=0; i<20; i++) {
+            const p_try = ray.propagate(t_curr);
+            const loc = this.toLocal(p_try);
+            const disc = 1 - Cx*Cx*loc.x*loc.x - Cy*Cy*loc.y*loc.y;
+            if(disc < 0) return null; 
+            const z_surf = (Cx*loc.x*loc.x + Cy*loc.y*loc.y) / (1 + Math.sqrt(disc));
+            const delta_z = loc.z - z_surf;
+            const k_loc = this.toLocal(ray.p.add(ray.k)).sub(this.toLocal(ray.p)); 
+            if(Math.abs(k_loc.z) < 1e-12) break; 
+            t_curr -= delta_z / k_loc.z; 
+        }
+        
+        const hit = ray.propagate(t_curr);
+        const loc = this.toLocal(hit);
+        const disc = 1 - Cx*Cx*loc.x*loc.x - Cy*Cy*loc.y*loc.y;
+        const root = Math.sqrt(disc);
+        const nx_loc = -loc.x * Cx / root;
+        const ny_loc = -loc.y * Cy / root;
+        const nz_loc = 1;
+        
+        const n_loc = new Vec3(nx_loc, ny_loc, nz_loc).normalize();
+        const n_glob = this.toGlobalVec(n_loc);
+        const dot = ray.k.dot(n_glob);
+        const k_prime = ray.k.sub(n_glob.mul(2*dot));
+        return { point: hit, normal: n_glob, out_dir: k_prime, dist: t_curr };
+    }
+}
+
+function solveSystem() {
+    const D1 = parseFloat(document.getElementById('m1_dia').value);
+    const R1 = parseFloat(document.getElementById('m1_roc').value);
+    const K1 = parseFloat(document.getElementById('m1_k').value);
+    const R2 = parseFloat(document.getElementById('m2_roc').value);
+    const K2 = parseFloat(document.getElementById('m2_k').value);
+    const d1 = parseFloat(document.getElementById('d1').value);
+    const d_m3_back = parseFloat(document.getElementById('m3_back').value);
+    const target_bfl = parseFloat(document.getElementById('target_bfl').value);
+
+    const z_m1 = 0;
+    const z_m2 = -d1; 
+    const z_m3 = d_m3_back; 
+    const M3_TILT = 45; 
+    const TARGET_Y = -target_bfl;
+
+    const m1 = new ConicSurface(z_m1, R1, K1, D1);
+    const m2 = new ConicSurface(z_m2, R2, K2, D1*0.5);
+
+    // 1. Calculate Native Properties
+    const rMarg = new Ray(new Vec3(0, D1/2, -1000), new Vec3(0,0,1));
+    const h1m = m1.intersect(rMarg);
+    const h2m = m2.intersect(new Ray(h1m.point, h1m.out_dir));
+    
+    let starting_f = 0;
+    let s_obj_dist = 1000;
+
+    if (h2m) {
+        const t_focus = -h2m.point.y / h2m.out_dir.y;
+        const z_focus = h2m.point.z + t_focus * h2m.out_dir.z;
+        const tan_u = h2m.out_dir.y / h2m.out_dir.z;
+        starting_f = ((D1/2) / Math.abs(tan_u)) / D1;
+        s_obj_dist = z_focus - z_m3;
+    }
+    
+    // Improved seed logic
+    const P_needed = (1/target_bfl) - (1/s_obj_dist);
+    let R_base = 2/P_needed;
+    let Rt = R_base / Math.cos(Math.PI/4);
+    let Rs = R_base * Math.cos(Math.PI/4);
+
+    // 3. OPTIMIZATION LOOP
+    function traceErrors(test_Rt, test_Rs) {
+        const surfM3 = new TiltedToroid(z_m3, test_Rt, test_Rs, M3_TILT);
+        const rTop = new Ray(new Vec3(0, D1/2, -1000), new Vec3(0,0,1));
+        const h1t = m1.intersect(rTop);
+        const h2t = m2.intersect(new Ray(h1t.point, h1t.out_dir));
+        const h3t = surfM3.intersect(new Ray(h2t.point, h2t.out_dir));
+        const rBot = new Ray(new Vec3(0, -D1/2, -1000), new Vec3(0,0,1));
+        const h1b = m1.intersect(rBot);
+        const h2b = m2.intersect(new Ray(h1b.point, h1b.out_dir));
+        const h3b = surfM3.intersect(new Ray(h2b.point, h2b.out_dir));
+        if(!h3t || !h3b) return { err: true };
+        
+        // Intersection crossing 
+        const mt = h3t.out_dir.z / h3t.out_dir.y;
+        const mb = h3b.out_dir.z / h3b.out_dir.y;
+        let Y_cross = (Math.abs(mt - mb) < 1e-12) ? -1e6 : ((h3b.point.z - h3b.point.y*mb) - (h3t.point.z - h3t.point.y*mt)) / (mt - mb);
+
+        const rSkew = new Ray(new Vec3(D1/2, 0, -1000), new Vec3(0,0,1));
+        const h1s = m1.intersect(rSkew);
+        const h2s = m2.intersect(new Ray(h1s.point, h1s.out_dir));
+        const h3s = surfM3.intersect(new Ray(h2s.point, h2s.out_dir));
+        if(!h3s) return { err: true };
+        const t_sag = -h3s.point.x / h3s.out_dir.x;
+        const Y_sag_focus = h3s.point.y + t_sag * h3s.out_dir.y;
+        
+        // Calculate tan_u at the focus for true f# sensitivity
+        const dy = Math.abs(h3t.out_dir.y);
+        const dz = Math.abs(h3t.out_dir.z);
+        const tan_u_local = dz / dy;
+        
+        return { err: false, eM: Y_cross - TARGET_Y, eS: Y_sag_focus - TARGET_Y, tan_u: tan_u_local };
+    }
+    
+    let step = 0.05; 
+    let damp = 0.95; 
+    for(let i=0; i<60; i++) {
+        const res0 = traceErrors(Rt, Rs);
+        if(res0.err) break;
+        const resRt = traceErrors(Rt + step, Rs);
+        const dEm = (resRt.eM - res0.eM) / step;
+        const resRs = traceErrors(Rt, Rs + step);
+        const dEs = (resRs.eS - res0.eS) / step;
+        if(Math.abs(dEm) > 1e-16) Rt -= damp * (res0.eM / dEm);
+        if(Math.abs(dEs) > 1e-16) Rs -= damp * (res0.eS / dEs);
+        if (Math.abs(res0.eM) < 1e-8 && Math.abs(res0.eS) < 1e-8) break; 
+    }
+    
+    const final = traceErrors(Rt, Rs);
+    return { Rt, Rs, m1, m2, z_m3, target_bfl, D1, starting_f, final_f: (!final.err ? ((D1/2) / final.tan_u) / D1 : 0) };
+}
+
+function runOptimization() {
+    const status = document.getElementById('status-msg');
+    status.innerHTML = "Optimising...";
+    status.style.color = "var(--accent-color)";
+
+    setTimeout(() => {
+        const sol = solveSystem();
+        const panel = document.getElementById('results');
+        const r_ratio = sol.Rt / sol.Rs;
+        const r_diff = Math.abs(sol.Rt - sol.Rs);
+        panel.innerHTML = `
+            <div class="metric-row"><span class="metric-label">Native F# (M1+M2)</span> <span class="metric-val val-info">f/${sol.starting_f.toFixed(2)}</span></div>
+            <div class="metric-row"><span class="metric-label">Effective F#</span> <span class="metric-val val-info">f/${sol.final_f.toFixed(2)}</span></div>
+            <hr style="border:0; border-top:1px solid #333; margin:8px 0;">
+            <div class="metric-row"><span class="metric-label">M3 Radius (Tang.)</span> <span class="metric-val">${sol.Rt.toFixed(2)} mm</span></div>
+            <div class="metric-row"><span class="metric-label">M3 Radius (Sag.)</span> <span class="metric-val">${sol.Rs.toFixed(2)} mm</span></div>
+            <div class="metric-row"><span class="metric-label">Anamorphic Ratio</span> <span class="metric-val">${r_ratio.toFixed(3)}</span></div>
+            <div class="metric-row"><span class="metric-label">Delta R</span> <span class="metric-val ${r_diff > 100 ? 'val-bad' : 'val-good'}">${r_diff.toFixed(2)} mm</span></div>
+        `;
+        status.innerHTML = "Trace Complete";
+        status.style.color = "#666";
+        plotSystem(sol);
+    }, 50);
+}
+
+function plotSystem(sol) {
+    const traces = [];
+    const blue = '#00bcd4';
+    const orange = '#ff9800';
+    
+    function drawConic(surf, dia, color) {
+        const y = [], z = [];
+        for(let i=-30; i<=30; i++) {
+            const h = (dia/2) * (i/30);
+            const r2 = h*h;
+            y.push(h);
+            z.push(surf.z0 + (surf.c * r2) / (1 + Math.sqrt(1 - (1+surf.K)*surf.c*surf.c*r2)));
+        }
+        return {x: z, y: y, mode: 'lines', line: {color, width: 3}, hoverinfo: 'none'};
+    }
+    
+    traces.push(drawConic(sol.m1, sol.D1, blue));
+    traces.push(drawConic(sol.m2, sol.D1*0.4, blue));
+    
+        // M3 Toroidal Surface - CORRECTED transformation
+    const m3_y = [], m3_z = [];
+    const m3_aperture = sol.D1 * 0.3;
+    const Cy = 1 / sol.Rt;  // Use Rt for meridional (matches ray tracing code)
+    const cosT = Math.cos(Math.PI/4);
+    const sinT = Math.sin(Math.PI/4);
+    
+    const nPoints = 61;
+    for(let i = 0; i < nPoints; i++) {
+        // Local coordinates (y_local along surface, z_local perpendicular)
+        const y_loc = m3_aperture * ((i / (nPoints-1)) - 0.5);
+        const y2 = y_loc * y_loc;
+        const disc = 1 - Cy*Cy*y2;
+        
+        // Positive sag (matches ray tracing code)
+        const z_loc = disc > 0 ? (Cy * y2) / (1 + Math.sqrt(disc)) : 0;
+        
+        // CORRECT inverse transformation (local → global)
+        // This is the inverse of toLocal() in TiltedToroid class
+        m3_y.push(y_loc * cosT + z_loc * sinT);           // Note: PLUS
+        m3_z.push(sol.z_m3 - y_loc * sinT + z_loc * cosT); // Note: MINUS for y_loc term
+    }
+    
+    traces.push({
+        x: m3_z, 
+        y: m3_y, 
+        mode: 'lines', 
+        line: {color: orange, width: 3}, 
+        name: 'M3',
+        hoverinfo: 'none'
+    });
+
+    
+    const density = parseInt(document.getElementById('ray_density').value);
+    const rayExt = parseFloat(document.getElementById('ray_len').value);
+    const m3Surf = new TiltedToroid(sol.z_m3, sol.Rt, sol.Rs, 45);
+    const xr = [], yr = [];
+    
+    for(let i=0; i<density; i++) {
+        const h = (sol.D1/2) * ((2*i / (density-1)) - 1);
+        const r = new Ray(new Vec3(0, h, -500), new Vec3(0,0,1));
+        const h1 = sol.m1.intersect(r); if(!h1) continue;
+        const h2 = sol.m2.intersect(new Ray(h1.point, h1.out_dir)); if(!h2) continue;
+        const h3 = m3Surf.intersect(new Ray(h2.point, h2.out_dir)); if(!h3) continue;
+        
+        // Final ray towards focus at -BFL
+        const tf = (-sol.target_bfl - h3.point.y) / h3.out_dir.y;
+        const pe = h3.point.add(h3.out_dir.mul(tf + rayExt));
+        xr.push(-200, h1.point.z, h2.point.z, h3.point.z, pe.z, null);
+        yr.push(h, h1.point.y, h2.point.y, h3.point.y, pe.y, null);
+    }
+    traces.push({x: xr, y: yr, mode: 'lines', line: {color: 'rgba(255,255,255,0.2)', width: 1}, showlegend: false, hoverinfo: 'none'});
+
+    Plotly.newPlot('plotDiv', traces, {
+        title: 'Optical Layout (Y-Z Plane)', paper_bgcolor: '#050505', plot_bgcolor: '#050505', font: {color: '#aaa'},
+        xaxis: {title: 'Z Axis (mm)', gridcolor: '#222', zerolinecolor: '#444', scaleanchor: 'y', scaleratio: 1},
+        yaxis: {title: 'Y Axis (mm)', gridcolor: '#222', zerolinecolor: '#444'},
+        margin: {l: 50, r: 20, t: 40, b: 40}, showlegend: false, dragmode: 'pan'
+    }, {responsive: true, displayModeBar: true, scrollZoom: true});
+}
+window.onload = runOptimization;
+</script>
+</body>
+</html>
