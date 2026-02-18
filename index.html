@@ -3,286 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Vector Ray Trace: Cassegrain + Toroidal M3 — v3.3</title>
+    <title>Vector Ray Trace: Cassegrain + Toroidal M3 — v3.4</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
-        /* ── Design tokens ─────────────────────────────────────── */
         :root {
-            --bg:       #121212;
-            --panel:    #1e1e1e;
-            --text:     #e0e0e0;
-            --accent:   #00bcd4;
-            --accent-h: #00acc1;
-            --err:      #cf6679;
-            --ok:       #03dac6;
-            --warn:     #ffb74d;
-            --border:   #333;
-            --input-bg: #2d2d2d;
-            --sidebar-w: 340px;
+            --bg:#121212; --panel:#1e1e1e; --text:#e0e0e0;
+            --accent:#00bcd4; --accent-h:#00acc1;
+            --err:#cf6679; --ok:#03dac6; --warn:#ffb74d;
+            --border:#333; --input-bg:#2d2d2d; --sidebar-w:340px;
         }
+        *,*::before,*::after{box-sizing:border-box;}
+        html{height:100%;}
+        body{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+             background:var(--bg);color:var(--text);margin:0;padding:0;
+             display:flex;height:100%;overflow:hidden;}
+        ::-webkit-scrollbar{width:6px;height:6px;}
+        ::-webkit-scrollbar-track{background:var(--bg);}
+        ::-webkit-scrollbar-thumb{background:#444;border-radius:3px;}
 
-        /* ── Reset & base ──────────────────────────────────────── */
-        *, *::before, *::after { box-sizing: border-box; }
-        html { height: 100%; }
-        body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            margin: 0; padding: 0;
-            display: flex;
-            height: 100%;
-            overflow: hidden;          /* desktop: no body scroll */
-        }
+        /* Sidebar */
+        .sidebar{width:var(--sidebar-w);background:var(--panel);
+                 border-right:1px solid var(--border);display:flex;
+                 flex-direction:column;padding:18px 16px;overflow-y:auto;
+                 flex-shrink:0;box-shadow:4px 0 15px rgba(0,0,0,.5);z-index:20;}
+        .mobile-toggle{display:none;width:100%;background:var(--panel);
+                       border:none;border-bottom:1px solid var(--border);
+                       color:var(--accent);font-size:.85rem;font-weight:700;
+                       letter-spacing:.5px;padding:12px 16px;text-align:left;
+                       cursor:pointer;position:sticky;top:0;z-index:30;flex-shrink:0;}
+        .mobile-toggle svg{float:right;transition:transform .25s;}
+        .mobile-toggle.open svg{transform:rotate(180deg);}
 
-        /* ── Scrollbar ─────────────────────────────────────────── */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        /* Main */
+        .main-content{flex:1;display:flex;flex-direction:column;
+                      background:#050505;min-width:0;overflow:hidden;}
+        #plotDiv{flex:1;min-height:0;}
+        #spotDiv{height:300px;flex-shrink:0;border-top:1px solid var(--border);}
 
-        /* ══════════════════════════════════════════════════════════
-           SIDEBAR  (desktop: fixed-width left panel)
-           ══════════════════════════════════════════════════════ */
-        .sidebar {
-            width: var(--sidebar-w);
-            background: var(--panel);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            padding: 18px 16px;
-            overflow-y: auto;
-            flex-shrink: 0;
-            box-shadow: 4px 0 15px rgba(0,0,0,0.5);
-            z-index: 20;
-        }
-
-        /* Mobile toggle bar — hidden on desktop */
-        .mobile-toggle {
-            display: none;
-            width: 100%;
-            background: var(--panel);
-            border: none;
-            border-bottom: 1px solid var(--border);
-            color: var(--accent);
-            font-size: 0.85rem;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            padding: 12px 16px;
-            text-align: left;
-            cursor: pointer;
-            position: sticky;
-            top: 0;
-            z-index: 30;
-            flex-shrink: 0;
-        }
-        .mobile-toggle svg { float: right; transition: transform 0.25s; }
-        .mobile-toggle.open svg { transform: rotate(180deg); }
-
-        /* ══════════════════════════════════════════════════════════
-           MAIN CONTENT  (desktop: flex:1, side by side)
-           ══════════════════════════════════════════════════════ */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: #050505;
-            min-width: 0;
-            overflow: hidden;
-        }
-        #plotDiv  { flex: 1; min-height: 0; }
-        #spotDiv  { height: 300px; flex-shrink: 0; border-top: 1px solid var(--border); }
-
-        /* ══════════════════════════════════════════════════════════
-           FORM ELEMENTS
-           ══════════════════════════════════════════════════════ */
-        h1 { margin: 0 0 2px; font-size: 1.15rem; color: var(--accent); letter-spacing: 0.5px; }
-        .version-tag {
-            font-size: 0.62rem; color: #555;
-            font-family: 'Consolas', monospace; margin-bottom: 12px; letter-spacing: 0.5px;
-        }
-        h2 { margin: 0 0 16px; font-size: 0.75rem; opacity: 0.55;
-             font-weight: normal; text-transform: uppercase; }
-
-        .section-header {
-            font-size: 0.72rem; font-weight: 700; color: #777;
-            margin: 14px 0 7px; text-transform: uppercase; letter-spacing: 1px;
-            border-bottom: 1px solid #2a2a2a; padding-bottom: 3px;
-        }
-        .input-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-        }
-        .input-group { margin-bottom: 7px; }
-        .input-group label {
-            display: block; font-size: 0.72rem;
-            margin-bottom: 3px; color: #999;
-        }
+        /* Typography */
+        h1{margin:0 0 2px;font-size:1.15rem;color:var(--accent);letter-spacing:.5px;}
+        .version-tag{font-size:.62rem;color:#555;font-family:'Consolas',monospace;
+                     margin-bottom:12px;letter-spacing:.5px;}
+        h2{margin:0 0 16px;font-size:.75rem;opacity:.55;font-weight:normal;text-transform:uppercase;}
+        .section-header{font-size:.72rem;font-weight:700;color:#777;margin:14px 0 7px;
+                        text-transform:uppercase;letter-spacing:1px;
+                        border-bottom:1px solid #2a2a2a;padding-bottom:3px;}
+        .input-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+        .input-group{margin-bottom:7px;}
+        .input-group label{display:block;font-size:.72rem;margin-bottom:3px;color:#999;}
         .input-group input[type="number"],
-        .input-group input[type="range"] {
-            width: 100%;
-            background: var(--input-bg);
-            border: 1px solid #444;
-            color: #fff;
-            padding: 7px 8px;
-            border-radius: 4px;
-            font-family: 'Consolas', monospace;
-            font-size: 16px;          /* ≥16px prevents iOS zoom */
-            transition: border-color 0.2s, background 0.2s;
-            -webkit-appearance: none;
+        .input-group input[type="range"]{
+            width:100%;background:var(--input-bg);border:1px solid #444;
+            color:#fff;padding:7px 8px;border-radius:4px;
+            font-family:'Consolas',monospace;font-size:16px;
+            transition:border-color .2s,background .2s;-webkit-appearance:none;}
+        .input-group input[type="number"]:focus{outline:none;border-color:var(--accent);background:#383838;}
+        .input-group input[type="range"]{padding:0;height:36px;background:transparent;
+                                         border:none;cursor:pointer;touch-action:manipulation;}
+        .input-group input[type="range"]::-webkit-slider-runnable-track{background:#444;height:4px;border-radius:2px;}
+        .input-group input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;
+            width:20px;height:20px;border-radius:50%;background:var(--accent);margin-top:-8px;}
+        button.run-btn{width:100%;padding:14px;background:var(--accent);color:#000;
+                       border:none;border-radius:5px;font-weight:700;font-size:.85rem;
+                       cursor:pointer;margin-top:16px;text-transform:uppercase;letter-spacing:1px;
+                       min-height:48px;transition:all .2s;box-shadow:0 4px 8px rgba(0,0,0,.4);
+                       touch-action:manipulation;}
+        button.run-btn:hover{background:var(--accent-h);transform:translateY(-1px);}
+        button.run-btn:active{transform:translateY(1px);}
+
+        /* Results */
+        .results-panel{margin-top:16px;background:#252525;padding:13px;border-radius:5px;
+                       border-left:3px solid var(--accent);font-family:'Consolas',monospace;font-size:.82rem;}
+        .metric-row{display:flex;justify-content:space-between;margin-bottom:4px;}
+        .metric-label{color:#777;}
+        .metric-val{color:#fff;font-weight:700;}
+        .val-good{color:var(--ok);} .val-bad{color:var(--err);}
+        .val-info{color:var(--accent);} .val-warn{color:var(--warn);}
+        .sub-header{font-size:.68rem;color:#555;text-transform:uppercase;letter-spacing:1px;
+                    margin:9px 0 4px;border-top:1px solid #2a2a2a;padding-top:7px;}
+        .tooltip{font-size:.67rem;color:#4a4a4a;margin-top:6px;font-style:italic;line-height:1.4;}
+        .status-bar{padding:4px 10px;background:#111;border-top:1px solid var(--border);
+                    font-size:.7rem;color:#555;display:flex;justify-content:space-between;flex-shrink:0;}
+
+        /* Mobile ≤640px */
+        @media(max-width:900px){:root{--sidebar-w:280px;}#spotDiv{height:260px;}}
+        @media(max-width:640px){
+            body{flex-direction:column;height:auto;min-height:100%;overflow:hidden;overflow-y:auto;}
+            .mobile-toggle{display:block;}
+            .sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border);
+                     box-shadow:none;overflow:hidden;max-height:0;padding:0 16px;
+                     transition:max-height .35s ease,padding .35s ease;}
+            .sidebar.open{max-height:2000px;padding:16px;overflow-y:auto;}
+            .main-content{overflow:visible;flex:none;}
+            #plotDiv{flex:none;height:max(280px,70vw);}
+            #spotDiv{height:520px;flex:none;}
+            .input-group input[type="number"]{padding:10px 8px;}
         }
-        .input-group input[type="number"]:focus {
-            outline: none; border-color: var(--accent); background: #383838;
-        }
-        .input-group input[type="range"] {
-            padding: 0; height: 36px; background: transparent;
-            border: none; cursor: pointer;
-            touch-action: manipulation;  /* smooth drag on touch */
-        }
-        .input-group input[type="range"]::-webkit-slider-runnable-track {
-            background: #444; height: 4px; border-radius: 2px;
-        }
-        .input-group input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 20px; height: 20px; border-radius: 50%;
-            background: var(--accent); margin-top: -8px;
-        }
-
-        button.run-btn {
-            width: 100%; padding: 14px;
-            background: var(--accent); color: #000;
-            border: none; border-radius: 5px;
-            font-weight: 700; font-size: 0.85rem;
-            cursor: pointer; margin-top: 16px;
-            text-transform: uppercase; letter-spacing: 1px;
-            min-height: 48px;          /* WCAG touch target */
-            transition: all 0.2s;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
-            touch-action: manipulation;
-        }
-        button.run-btn:hover  { background: var(--accent-h); transform: translateY(-1px); }
-        button.run-btn:active { transform: translateY(1px); }
-
-        /* ── Results panel ─────────────────────────────────────── */
-        .results-panel {
-            margin-top: 16px;
-            background: #252525;
-            padding: 13px;
-            border-radius: 5px;
-            border-left: 3px solid var(--accent);
-            font-family: 'Consolas', monospace;
-            font-size: 0.82rem;
-        }
-        .metric-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-        .metric-label { color: #777; }
-        .metric-val   { color: #fff; font-weight: 700; }
-        .val-good { color: var(--ok); }   .val-bad  { color: var(--err); }
-        .val-info { color: var(--accent); } .val-warn { color: var(--warn); }
-        .sub-header {
-            font-size: 0.68rem; color: #555; text-transform: uppercase;
-            letter-spacing: 1px; margin: 9px 0 4px;
-            border-top: 1px solid #2a2a2a; padding-top: 7px;
-        }
-        .tooltip {
-            font-size: 0.67rem; color: #4a4a4a;
-            margin-top: 6px; font-style: italic; line-height: 1.4;
-        }
-
-        /* ── Status bar ────────────────────────────────────────── */
-        .status-bar {
-            padding: 4px 10px; background: #111;
-            border-top: 1px solid var(--border);
-            font-size: 0.7rem; color: #555;
-            display: flex; justify-content: space-between;
-            flex-shrink: 0;
-        }
-
-        /* ══════════════════════════════════════════════════════════
-           TABLET  ≤ 900px  (portrait tablet / large phone landscape)
-           ══════════════════════════════════════════════════════ */
-        @media (max-width: 900px) {
-            :root { --sidebar-w: 280px; }
-            #spotDiv { height: 260px; }
-        }
-
-        /* ══════════════════════════════════════════════════════════
-           MOBILE  ≤ 640px  (phones)
-           ══════════════════════════════════════════════════════ */
-        @media (max-width: 640px) {
-            /* Body becomes a vertical scroll container */
-            body {
-                flex-direction: column;
-                height: auto;
-                min-height: 100%;
-                overflow: hidden;          /* outer body doesn't scroll */
-                overflow-y: auto;          /* but DOES scroll vertically */
-            }
-
-            /* Show toggle bar */
-            .mobile-toggle { display: block; }
-
-            /* Sidebar: full-width, collapsible via max-height */
-            .sidebar {
-                width: 100%;
-                border-right: none;
-                border-bottom: 1px solid var(--border);
-                box-shadow: none;
-                overflow: hidden;
-                max-height: 0;             /* collapsed by default */
-                padding: 0 16px;
-                transition: max-height 0.35s ease, padding 0.35s ease;
-            }
-            .sidebar.open {
-                max-height: 2000px;        /* large enough for all content */
-                padding: 16px;
-                overflow-y: auto;
-            }
-
-            /* Main content: normal flow, auto height */
-            .main-content {
-                overflow: visible;
-                flex: none;
-            }
-
-            /* Optical layout: 70vw height, min 280px */
-            #plotDiv {
-                flex: none;
-                height: max(280px, 70vw);
-            }
-
-            /* Spot diagrams: taller to accommodate stacked layout */
-            #spotDiv {
-                height: 520px;             /* two stacked panels ~260px each */
-                flex: none;
-            }
-
-            /* Larger tap targets for inputs */
-            .input-group input[type="number"] {
-                padding: 10px 8px;
-                font-size: 16px;
-            }
-
-            /* Full-width single-column input grid on very narrow screens */
-            @media (max-width: 380px) {
-                .input-grid { grid-template-columns: 1fr; }
-            }
-        }
-
-        /* Safe-area insets for notched phones (iPhone X+) */
-        @supports (padding: max(0px)) {
-            .sidebar, .mobile-toggle {
-                padding-left:  max(16px, env(safe-area-inset-left));
-                padding-right: max(16px, env(safe-area-inset-right));
-            }
-            .status-bar {
-                padding-bottom: max(4px, env(safe-area-inset-bottom));
-            }
+        @media(max-width:380px){.input-grid{grid-template-columns:1fr;}}
+        @supports(padding:max(0px)){
+            .sidebar,.mobile-toggle{
+                padding-left:max(16px,env(safe-area-inset-left));
+                padding-right:max(16px,env(safe-area-inset-right));}
+            .status-bar{padding-bottom:max(4px,env(safe-area-inset-bottom));}
         }
     </style>
 </head>
 <body>
 
-<!-- Mobile-only collapsible toggle ─────────────────────────── -->
-<button class="mobile-toggle" id="sidebarToggle" onclick="toggleSidebar()" aria-expanded="false" aria-controls="sidebar">
+<button class="mobile-toggle" id="sidebarToggle"
+        onclick="toggleSidebar()" aria-expanded="false" aria-controls="sidebar">
     ☰ &nbsp;Parameters
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <polyline points="2,4 7,10 12,4" stroke="currentColor" stroke-width="2"
@@ -290,215 +119,156 @@
     </svg>
 </button>
 
-<!-- Sidebar ────────────────────────────────────────────────── -->
 <div class="sidebar" id="sidebar" role="complementary" aria-label="System parameters">
     <header>
         <h1>Cassegrain Optimiser</h1>
-        <div class="version-tag">v3.3 · True Toroid · 2×2 Newton · Mobile</div>
+        <div class="version-tag">v3.4 · True Toroid · 2×2 Newton · Footprints</div>
         <h2>3D Vector Ray Trace Engine</h2>
     </header>
 
     <div class="section-header">Primary Mirror (M1)</div>
     <div class="input-grid">
-        <div class="input-group">
-            <label for="m1_dia">Diameter (mm)</label>
-            <input type="number" id="m1_dia" value="600" inputmode="decimal">
-        </div>
-        <div class="input-group">
-            <label for="m1_roc">Radius (neg, mm)</label>
-            <input type="number" id="m1_roc" value="-2447.7" inputmode="decimal">
-        </div>
+        <div class="input-group"><label for="m1_dia">Diameter (mm)</label>
+            <input type="number" id="m1_dia" value="600" inputmode="decimal"></div>
+        <div class="input-group"><label for="m1_roc">Radius (neg, mm)</label>
+            <input type="number" id="m1_roc" value="-2447.7" inputmode="decimal"></div>
     </div>
-    <div class="input-group">
-        <label for="m1_k">Conic constant (k)</label>
-        <input type="number" id="m1_k" value="-1" inputmode="decimal">
-    </div>
+    <div class="input-group"><label for="m1_k">Conic constant (k)</label>
+        <input type="number" id="m1_k" value="-1" inputmode="decimal"></div>
 
     <div class="section-header">Secondary Mirror (M2)</div>
     <div class="input-grid">
-        <div class="input-group">
-            <label for="m2_roc">Radius (neg, mm)</label>
-            <input type="number" id="m2_roc" value="-272.2" inputmode="decimal">
-        </div>
-        <div class="input-group">
-            <label for="m2_k">Conic constant (k)</label>
-            <input type="number" id="m2_k" value="-1.4336" inputmode="decimal">
-        </div>
+        <div class="input-group"><label for="m2_roc">Radius (neg, mm)</label>
+            <input type="number" id="m2_roc" value="-272.2" inputmode="decimal"></div>
+        <div class="input-group"><label for="m2_k">Conic constant (k)</label>
+            <input type="number" id="m2_k" value="-1.4336" inputmode="decimal"></div>
     </div>
-    <div class="input-group">
-        <label for="d1">Dist. from M1 (mm)</label>
-        <input type="number" id="d1" value="1100" inputmode="decimal">
-    </div>
+    <div class="input-group"><label for="d1">Dist. from M1 (mm)</label>
+        <input type="number" id="d1" value="1100" inputmode="decimal"></div>
 
     <div class="section-header">Fold Mirror (M3) — Toroid</div>
     <div class="input-grid">
-        <div class="input-group">
-            <label for="m3_back">Dist. behind M1 (mm)</label>
-            <input type="number" id="m3_back" value="100" inputmode="decimal">
-        </div>
-        <div class="input-group">
-            <label for="target_bfl">Target BFL (mm)</label>
-            <input type="number" id="target_bfl" value="50" inputmode="decimal">
-        </div>
+        <div class="input-group"><label for="m3_back">Dist. behind M1 (mm)</label>
+            <input type="number" id="m3_back" value="100" inputmode="decimal"></div>
+        <div class="input-group"><label for="target_bfl">Target BFL (mm)</label>
+            <input type="number" id="target_bfl" value="50" inputmode="decimal"></div>
     </div>
 
     <div class="section-header">Settings</div>
     <div class="input-grid">
-        <div class="input-group">
-            <label for="ray_density">Ray Density</label>
-            <input type="range" id="ray_density" min="3" max="25" value="7">
-        </div>
-        <div class="input-group">
-            <label for="ray_len">Ray Extension (mm)</label>
-            <input type="range" id="ray_len" min="0" max="500" value="50" step="10">
-        </div>
-        <div class="input-group">
-            <label for="det_diag">Detector Diagonal (mm)</label>
-            <input type="number" id="det_diag" value="20" min="1" max="200" inputmode="decimal">
-        </div>
-        <div class="input-group">
-            <label for="lambda_nm">Spot λ (nm)</label>
-            <input type="number" id="lambda_nm" value="550" min="300" max="1100" step="10" inputmode="decimal">
-        </div>
+        <div class="input-group"><label for="ray_density">Ray Density</label>
+            <input type="range" id="ray_density" min="3" max="25" value="7"></div>
+        <div class="input-group"><label for="ray_len">Ray Extension (mm)</label>
+            <input type="range" id="ray_len" min="0" max="500" value="50" step="10"></div>
+        <div class="input-group"><label for="det_diag">Detector Diagonal (mm)</label>
+            <input type="number" id="det_diag" value="20" min="1" max="200" inputmode="decimal"></div>
+        <div class="input-group"><label for="lambda_nm">Spot λ (nm)</label>
+            <input type="number" id="lambda_nm" value="550" min="300" max="1100" step="10" inputmode="decimal"></div>
     </div>
 
     <button class="run-btn" onclick="runOptimization()">▶ Run Solver</button>
 
     <div class="results-panel" id="results">
-        <div style="text-align:center; color:#444; padding:8px 0;">Waiting for trace…</div>
+        <div style="text-align:center;color:#444;padding:8px 0;">Waiting for trace…</div>
     </div>
     <div class="tooltip">
-        *2×2 Newton solver · true toroidal sag geometry.<br>
-        †FoV for specified detector diagonal.<br>
-        ‡Spot diagrams: on-axis geometric, 10-ring pupil.
+        *2×2 Newton solver · true toroidal sag.<br>
+        †Footprints: filled 20-ring pupil, no margin.<br>
+        ‡M3 ellipse: sagittal × meridional axes.
     </div>
 </div>
 
-<!-- Main content ────────────────────────────────────────────── -->
 <div class="main-content" role="main">
     <div id="plotDiv"></div>
     <div id="spotDiv"></div>
     <div class="status-bar">
         <span id="status-msg">System Ready</span>
-        <span>v3.3</span>
+        <span>v3.4</span>
     </div>
 </div>
 
 <script>
 /**
  * ============================================================
- * CASSEGRAIN + TOROIDAL M3 — 3D VECTOR RAY TRACE ENGINE
- * Version 3.3 — 2026-02-18
+ * CASSEGRAIN + TOROIDAL M3 — v3.4  (2026-02-18)
  * ============================================================
- * v3.1 (from v2.9):
- *   [1] True toroidal sag: separate per-axis discriminants.
- *   [2] Surface normal: per-axis sqrt denominators.
- *   [3] Seed Rs = Rbase/cos(θ).
- *   [4] Full 2×2 Newton–Raphson optimiser.
- *   [5] M3 profile plot uses true toroidal sag.
- * v3.2:
- *   [6] FoV estimation (EFL, plate scale, detector FoV).
- *   [7] Version tag in header and status bar.
- *   [8] On-axis geometric spot diagrams (Plotly subplots).
- *   [9] λ (nm) input for Airy disk overlay.
- * v3.3 (mobile optimisation):
- *  [10] Responsive CSS: desktop side-by-side, phone vertical stack.
- *  [11] Collapsible sidebar with toggle button on mobile.
- *  [12] Input font-size ≥ 16px (prevents iOS auto-zoom).
- *  [13] Touch-action: manipulation on sliders and buttons.
- *  [14] WCAG-compliant touch targets (min 48px height) on button.
- *  [15] Plotly config: scrollZoom disabled on touch, modeBar
- *       reduced on mobile.
- *  [16] Spot diagram Plotly layout: 2-col on desktop, 1-col
- *       stacked on mobile (detected via window.innerWidth).
- *  [17] Safe-area inset support for notched phones.
- *  [18] inputmode="decimal" on numeric inputs for correct
- *       mobile keyboard type.
- *  [19] Auto-collapse sidebar after Run Solver on mobile.
- *  [20] Plotly chart resize observer for correct rendering
- *       after sidebar collapse/expand.
+ * Changes from v3.3:
+ *  [21] Default BFL changed to 50 mm.
+ *  [22] computeFootprints(): traces filled 20-ring hexagonal
+ *       pupil grid through M1→M2 and M1→M2→M3 to determine:
+ *         • M2 footprint diameter  (circular, axially symmetric)
+ *         • M3 footprint semi-axes a (sagittal) and b (meridional)
+ *           in the M3 local frame; b/a ≈ √2 for 45° tilt
+ *         • M3 footprint centroid offset
+ *  [23] Results panel: new "Mirror Footprints" subsection shows
+ *       M2 ⌀ and M3 ellipse dimensions.
+ *  [24] plotSystem(): M2 is drawn at the computed footprint
+ *       diameter (not D1×0.4 fixed). M3 is drawn at its true
+ *       elliptical footprint projected onto the Y-Z plane.
+ *  [25] Mirror footprint outlines drawn as separate Plotly
+ *       traces with dashed orange annotation rings/ellipses.
  * ============================================================
  */
 
-// ── Mobile helpers ────────────────────────────────────────────
-const isMobile = () => window.innerWidth <= 640;
+const isMobile=()=>window.innerWidth<=640;
 
-function toggleSidebar() {
-    const sb  = document.getElementById('sidebar');
-    const btn = document.getElementById('sidebarToggle');
-    const open = sb.classList.toggle('open');
-    btn.classList.toggle('open', open);
-    btn.setAttribute('aria-expanded', open);
-    // Resize charts after transition so Plotly recalculates layout
-    setTimeout(() => {
-        Plotly.Plots.resize('plotDiv');
-        Plotly.Plots.resize('spotDiv');
-    }, 370);
+function toggleSidebar(){
+    const sb=document.getElementById('sidebar'),btn=document.getElementById('sidebarToggle');
+    const open=sb.classList.toggle('open');
+    btn.classList.toggle('open',open);
+    btn.setAttribute('aria-expanded',open);
+    setTimeout(()=>{Plotly.Plots.resize('plotDiv');Plotly.Plots.resize('spotDiv');},370);
 }
 
-// ── Vector Math ───────────────────────────────────────────────
-class Vec3 {
+// ── Vec3 & Ray ────────────────────────────────────────────────
+class Vec3{
     constructor(x,y,z){this.x=x;this.y=y;this.z=z;}
     static zero(){return new Vec3(0,0,0);}
-    add(v) {return new Vec3(this.x+v.x,this.y+v.y,this.z+v.z);}
-    sub(v) {return new Vec3(this.x-v.x,this.y-v.y,this.z-v.z);}
-    mul(s) {return new Vec3(this.x*s,  this.y*s,  this.z*s);}
-    dot(v) {return this.x*v.x+this.y*v.y+this.z*v.z;}
-    mag()  {return Math.sqrt(this.x*this.x+this.y*this.y+this.z*this.z);}
+    add(v){return new Vec3(this.x+v.x,this.y+v.y,this.z+v.z);}
+    sub(v){return new Vec3(this.x-v.x,this.y-v.y,this.z-v.z);}
+    mul(s){return new Vec3(this.x*s,this.y*s,this.z*s);}
+    dot(v){return this.x*v.x+this.y*v.y+this.z*v.z;}
+    mag(){return Math.sqrt(this.x*this.x+this.y*this.y+this.z*this.z);}
     normalize(){const m=this.mag();return m===0?Vec3.zero():this.mul(1/m);}
 }
-class Ray {
-    constructor(o,d){this.p=o;this.k=d.normalize();}
-    propagate(t){return this.p.add(this.k.mul(t));}
-}
+class Ray{constructor(o,d){this.p=o;this.k=d.normalize();}
+    propagate(t){return this.p.add(this.k.mul(t));}}
 
 // ── Conic Surface ─────────────────────────────────────────────
-class ConicSurface {
-    constructor(z0,R,K,ap){
-        this.z0=z0;this.R=R;this.K=K;this.ap=ap;
-        this.c=R!==0?1/R:0;
-    }
+class ConicSurface{
+    constructor(z0,R,K,ap){this.z0=z0;this.R=R;this.K=K;this.ap=ap;this.c=R!==0?1/R:0;}
     intersect(ray){
-        const p=ray.p.sub(new Vec3(0,0,this.z0)),k=ray.k;
-        const F=(1+this.K)*this.c;
+        const p=ray.p.sub(new Vec3(0,0,this.z0)),k=ray.k,F=(1+this.K)*this.c;
         const A=this.c*(k.x*k.x+k.y*k.y)+F*k.z*k.z;
         const B=2*this.c*(p.x*k.x+p.y*k.y)+2*F*p.z*k.z-2*k.z;
         const C=this.c*(p.x*p.x+p.y*p.y)+F*p.z*p.z-2*p.z;
         let t;
         if(Math.abs(A)<1e-9){t=-C/B;}
-        else{
-            const d=B*B-4*A*C;if(d<0)return null;
-            const t1=(-B-Math.sqrt(d))/(2*A),t2=(-B+Math.sqrt(d))/(2*A);
-            t=t1>1e-5?t1:t2;
-        }
+        else{const d=B*B-4*A*C;if(d<0)return null;
+             const t1=(-B-Math.sqrt(d))/(2*A),t2=(-B+Math.sqrt(d))/(2*A);t=t1>1e-5?t1:t2;}
         const hit=ray.propagate(t),hl=hit.sub(new Vec3(0,0,this.z0));
         if(hl.x*hl.x+hl.y*hl.y>(this.ap/2)*(this.ap/2))return null;
-        const nm=new Vec3(-this.c*hl.x,-this.c*hl.y,
-                          1-(this.K+1)*this.c*hl.z).normalize();
+        const nm=new Vec3(-this.c*hl.x,-this.c*hl.y,1-(this.K+1)*this.c*hl.z).normalize();
         const dot=ray.k.dot(nm);
-        return{point:hit,normal:nm,out_dir:ray.k.sub(nm.mul(2*dot)),dist:t};
+        return{point:hit,normal:nm,out_dir:ray.k.sub(nm.mul(2*dot)),dist:0};
     }
 }
 
 // ── Tilted Toroid ─────────────────────────────────────────────
-class TiltedToroid {
+class TiltedToroid{
     constructor(z0,Rt,Rs,ang){
         this.z0=z0;this.Rt=Rt;this.Rs=Rs;
         this.tilt=ang*Math.PI/180;
         this.cosT=Math.cos(this.tilt);this.sinT=Math.sin(this.tilt);
     }
-    toLocal(p){
-        const dz=p.z-this.z0;
-        return new Vec3(p.x,p.y*this.cosT-dz*this.sinT,p.y*this.sinT+dz*this.cosT);
-    }
+    toLocal(p){const dz=p.z-this.z0;
+        return new Vec3(p.x,p.y*this.cosT-dz*this.sinT,p.y*this.sinT+dz*this.cosT);}
     toGlobalVec(v){
-        return new Vec3(v.x,v.y*this.cosT+v.z*this.sinT,-v.y*this.sinT+v.z*this.cosT);
-    }
+        return new Vec3(v.x,v.y*this.cosT+v.z*this.sinT,-v.y*this.sinT+v.z*this.cosT);}
     static sag(x,y,Cx,Cy){
         const dX=1-Cx*Cx*x*x,dY=1-Cy*Cy*y*y;
         if(dX<0||dY<0)return null;
-        return(Cx*x*x)/(1+Math.sqrt(dX))+(Cy*y*y)/(1+Math.sqrt(dY));
-    }
+        return(Cx*x*x)/(1+Math.sqrt(dX))+(Cy*y*y)/(1+Math.sqrt(dY));}
     intersect(ray){
         const np=new Vec3(0,this.sinT,this.cosT),dn=ray.k.dot(np);
         if(Math.abs(dn)<1e-6)return null;
@@ -506,12 +276,9 @@ class TiltedToroid {
         const Cx=1/this.Rs,Cy=1/this.Rt;
         for(let i=0;i<20;i++){
             const loc=this.toLocal(ray.propagate(tc));
-            const zs=TiltedToroid.sag(loc.x,loc.y,Cx,Cy);
-            if(zs===null)return null;
+            const zs=TiltedToroid.sag(loc.x,loc.y,Cx,Cy);if(zs===null)return null;
             const kl=this.toLocal(ray.p.add(ray.k)).sub(this.toLocal(ray.p));
-            if(Math.abs(kl.z)<1e-12)break;
-            tc-=(loc.z-zs)/kl.z;
-        }
+            if(Math.abs(kl.z)<1e-12)break;tc-=(loc.z-zs)/kl.z;}
         const hit=ray.propagate(tc),loc=this.toLocal(hit);
         const Cx2=1/this.Rs,Cy2=1/this.Rt;
         const dX=1-Cx2*Cx2*loc.x*loc.x,dY=1-Cy2*Cy2*loc.y*loc.y;
@@ -522,26 +289,44 @@ class TiltedToroid {
     }
 }
 
-// ── FoV helper ────────────────────────────────────────────────
 function computeFoV(fn,D,det){
     const EFL=fn*D,PS=206265/EFL,fa=det*PS;
-    return{EFL,plateScale:PS,fov_as:fa,fov_amin:fa/60,fov_deg:fa/3600};
-}
+    return{EFL,plateScale:PS,fov_as:fa,fov_amin:fa/60,fov_deg:fa/3600};}
 
-// ── Hexagonal pupil grid ──────────────────────────────────────
 function buildPupil(N){
     const pts=[{px:0,py:0,rho:0}];
-    for(let r=1;r<=N;r++){
-        const n=6*r,rho=r/N;
-        for(let i=0;i<n;i++){
-            const a=2*Math.PI*i/n;
-            pts.push({px:rho*Math.cos(a),py:rho*Math.sin(a),rho});
-        }
+    for(let r=1;r<=N;r++){const n=6*r,rho=r/N;
+        for(let i=0;i<n;i++){const a=2*Math.PI*i/n;
+            pts.push({px:rho*Math.cos(a),py:rho*Math.sin(a),rho});}}
+    return pts;}
+
+// ── [22] Footprint computation ────────────────────────────────
+// Traces filled 20-ring pupil through M1→M2 (circular footprint)
+// and M1→M2→M3 (elliptical footprint in M3 local frame).
+// Returns {m2_dia, m3_semi_x, m3_semi_y, m3_cx, m3_cy, m2_pts, m3_pts_global}
+function computeFootprints(m1,m2_big,m3surf,D1){
+    const pupil=buildPupil(20);
+    const m2r=[],m3lx=[],m3ly=[],m3gx=[],m3gz=[];
+    for(const{px,py}of pupil){
+        const h1=m1.intersect(new Ray(new Vec3(px*D1/2,py*D1/2,-1000),new Vec3(0,0,1)));
+        if(!h1)continue;
+        const h2=m2_big.intersect(new Ray(h1.point,h1.out_dir));if(!h2)continue;
+        m2r.push(Math.sqrt(h2.point.x*h2.point.x+h2.point.y*h2.point.y));
+        const h3=m3surf.intersect(new Ray(h2.point,h2.out_dir));if(!h3)continue;
+        const loc=m3surf.toLocal(h3.point);
+        m3lx.push(loc.x);m3ly.push(loc.y);
+        m3gx.push(h3.point.x);m3gz.push(h3.point.z);
     }
-    return pts;
+    const m2_dia=2*Math.max(...m2r);
+    const m3_semi_x=(Math.max(...m3lx)-Math.min(...m3lx))/2;
+    const m3_semi_y=(Math.max(...m3ly)-Math.min(...m3ly))/2;
+    const m3_cx=(Math.max(...m3lx)+Math.min(...m3lx))/2;
+    const m3_cy=(Math.max(...m3ly)+Math.min(...m3ly))/2;
+    return{m2_dia,m3_semi_x,m3_semi_y,m3_cx,m3_cy,
+           m2_rmax:m2_dia/2,m3gx,m3gz};
 }
 
-// ── System solver ─────────────────────────────────────────────
+// ── Solver ────────────────────────────────────────────────────
 function solveSystem(){
     const g=id=>parseFloat(document.getElementById(id).value);
     const D1=g('m1_dia'),R1=g('m1_roc'),K1=g('m1_k');
@@ -551,16 +336,16 @@ function solveSystem(){
 
     const z_m1=0,z_m2=-d1,z_m3=d_m3,TY=-bfl;
     const m1=new ConicSurface(z_m1,R1,K1,D1);
-    const m2=new ConicSurface(z_m2,R2,K2,D1*0.5);
+    // Use oversized M2 for initial solve (footprint computed after)
+    const m2_big=new ConicSurface(z_m2,R2,K2,D1);
 
     const h1m=m1.intersect(new Ray(new Vec3(0,D1/2,-1000),new Vec3(0,0,1)));
-    const h2m=m2.intersect(new Ray(h1m.point,h1m.out_dir));
+    const h2m=m2_big.intersect(new Ray(h1m.point,h1m.out_dir));
     let sf=0,sod=1000,znf=0;
     if(h2m){
         const tf=-h2m.point.y/h2m.out_dir.y;
         sf=(D1/2)/Math.abs(h2m.out_dir.y/h2m.out_dir.z)/D1;
-        znf=h2m.point.z+tf*h2m.out_dir.z;
-        sod=znf-z_m3;
+        znf=h2m.point.z+tf*h2m.out_dir.z;sod=znf-z_m3;
     }
 
     const P=1/bfl-1/sod,Rb=2/P,c45=Math.cos(Math.PI/4);
@@ -569,17 +354,17 @@ function solveSystem(){
     function err(tRt,tRs){
         const s=new TiltedToroid(z_m3,tRt,tRs,45);
         const h1t=m1.intersect(new Ray(new Vec3(0, D1/2,-1000),new Vec3(0,0,1)));
-        const h2t=m2.intersect(new Ray(h1t.point,h1t.out_dir));
+        const h2t=m2_big.intersect(new Ray(h1t.point,h1t.out_dir));
         const h3t=s.intersect(new Ray(h2t.point,h2t.out_dir));
         const h1b=m1.intersect(new Ray(new Vec3(0,-D1/2,-1000),new Vec3(0,0,1)));
-        const h2b=m2.intersect(new Ray(h1b.point,h1b.out_dir));
+        const h2b=m2_big.intersect(new Ray(h1b.point,h1b.out_dir));
         const h3b=s.intersect(new Ray(h2b.point,h2b.out_dir));
         if(!h3t||!h3b)return null;
         const mt=h3t.out_dir.z/h3t.out_dir.y,mb=h3b.out_dir.z/h3b.out_dir.y;
         if(Math.abs(mt-mb)<1e-12)return null;
         const Yc=((h3b.point.z-h3b.point.y*mb)-(h3t.point.z-h3t.point.y*mt))/(mt-mb);
         const h1s=m1.intersect(new Ray(new Vec3(D1/2,0,-1000),new Vec3(0,0,1)));
-        const h2s=m2.intersect(new Ray(h1s.point,h1s.out_dir));
+        const h2s=m2_big.intersect(new Ray(h1s.point,h1s.out_dir));
         const h3s=s.intersect(new Ray(h2s.point,h2s.out_dir));
         if(!h3s)return null;
         const ts=-h3s.point.x/h3s.out_dir.x;
@@ -588,93 +373,87 @@ function solveSystem(){
         return{eM:Yc-TY,eS:Ys-TY,tan_u:tu};
     }
 
-    // 2×2 Newton–Raphson
     const st=0.5,dp=0.85;
     for(let i=0;i<80;i++){
-        const r0=err(Rt,Rs);   if(!r0)break;
-        const rT=err(Rt+st,Rs);if(!rT)break;
-        const rS=err(Rt,Rs+st);if(!rS)break;
+        const r0=err(Rt,Rs);if(!r0)break;
+        const rT=err(Rt+st,Rs),rS=err(Rt,Rs+st);if(!rT||!rS)break;
         const J00=(rT.eM-r0.eM)/st,J01=(rS.eM-r0.eM)/st;
         const J10=(rT.eS-r0.eS)/st,J11=(rS.eS-r0.eS)/st;
-        const det=J00*J11-J01*J10;
-        if(Math.abs(det)<1e-20)break;
-        Rt-=dp*(J11*r0.eM-J01*r0.eS)/det;
-        Rs-=dp*(-J10*r0.eM+J00*r0.eS)/det;
+        const det2=J00*J11-J01*J10;if(Math.abs(det2)<1e-20)break;
+        Rt-=dp*(J11*r0.eM-J01*r0.eS)/det2;
+        Rs-=dp*(-J10*r0.eM+J00*r0.eS)/det2;
         if(Math.abs(r0.eM)<1e-7&&Math.abs(r0.eS)<1e-7)break;
     }
 
     const fin=err(Rt,Rs);
     const ff=(fin&&fin.tan_u>0)?((D1/2)/fin.tan_u)/D1:0;
+
+    // [22] Footprints — use solved M3
+    const m3surf=new TiltedToroid(z_m3,Rt,Rs,45);
+    const fp=computeFootprints(m1,m2_big,m3surf,D1);
+
+    // Now build constrained surfaces with footprint apertures
+    const m2=new ConicSurface(z_m2,R2,K2,fp.m2_dia);
+    const m3dia=2*Math.max(fp.m3_semi_x,fp.m3_semi_y);
+
     const fvN=computeFoV(sf,D1,det),fvE=computeFoV(ff,D1,det);
 
-    // Spot trace
+    // Spot trace (10-ring pupil, uses m2_big so no vignetting)
     const pupil=buildPupil(10);
-    const m3sp=new TiltedToroid(z_m3,Rt,Rs,45);
     const sN=[],sE=[];
     for(const{px,py,rho}of pupil){
         const h1=m1.intersect(new Ray(new Vec3(px*D1/2,py*D1/2,-500),new Vec3(0,0,1)));
         if(!h1)continue;
-        const h2=m2.intersect(new Ray(h1.point,h1.out_dir));if(!h2)continue;
+        const h2=m2_big.intersect(new Ray(h1.point,h1.out_dir));if(!h2)continue;
         const tn=(znf-h2.point.z)/h2.out_dir.z;
-        const fn=h2.point.add(h2.out_dir.mul(tn));
-        sN.push({x:fn.x*1000,y:fn.y*1000,rho});
-        const h3=m3sp.intersect(new Ray(h2.point,h2.out_dir));if(!h3)continue;
+        const fn2=h2.point.add(h2.out_dir.mul(tn));
+        sN.push({x:fn2.x*1000,y:fn2.y*1000,rho});
+        const h3=m3surf.intersect(new Ray(h2.point,h2.out_dir));if(!h3)continue;
         const te=(-bfl-h3.point.y)/h3.out_dir.y;
         const fe=h3.point.add(h3.out_dir.mul(te));
         sE.push({x:fe.x*1000,z:fe.z*1000,rho});
     }
-    const cxN=sN.reduce((s,p)=>s+p.x,0)/sN.length;
-    const cyN=sN.reduce((s,p)=>s+p.y,0)/sN.length;
-    const cxE=sE.reduce((s,p)=>s+p.x,0)/sE.length;
-    const czE=sE.reduce((s,p)=>s+p.z,0)/sE.length;
-    sN.forEach(p=>{p.x-=cxN;p.y-=cyN;});
-    sE.forEach(p=>{p.x-=cxE;p.z-=czE;});
-
-    const rms=(pts,a,b)=>{
-        const r2=pts.map(p=>p[a]*p[a]+p[b]*p[b]);
-        return{rms:Math.sqrt(r2.reduce((s,v)=>s+v,0)/r2.length),
-               rmax:Math.sqrt(Math.max(...r2))};
-    };
+    const cxN=sN.reduce((s,p)=>s+p.x,0)/sN.length,cyN=sN.reduce((s,p)=>s+p.y,0)/sN.length;
+    const cxE=sE.reduce((s,p)=>s+p.x,0)/sE.length,czE=sE.reduce((s,p)=>s+p.z,0)/sE.length;
+    sN.forEach(p=>{p.x-=cxN;p.y-=cyN;});sE.forEach(p=>{p.x-=cxE;p.z-=czE;});
+    const rms=(pts,a,b)=>{const r2=pts.map(p=>p[a]*p[a]+p[b]*p[b]);
+        return{rms:Math.sqrt(r2.reduce((s,v)=>s+v,0)/r2.length),rmax:Math.sqrt(Math.max(...r2))};};
     const stN=rms(sN,'x','y'),stE=rms(sE,'x','z');
     const airN=1.22*lmm*sf*1e6,airE=1.22*lmm*ff*1e6;
 
-    return{Rt,Rs,m1,m2,z_m3,target_bfl:bfl,D1,det,lmm,
+    return{Rt,Rs,m1,m2,m2_big,z_m3,target_bfl:bfl,D1,det,lmm,
            starting_f:sf,final_f:ff,final:fin,
            fov_native:fvN,fov_eff:fvE,z_native_focus:znf,
-           spotsNative:sN,spotsEff:sE,stN,stE,airN,airE};
+           spotsNative:sN,spotsEff:sE,stN,stE,airN,airE,
+           fp,m3surf,m3dia};
 }
 
-// ── UI runner ─────────────────────────────────────────────────
+// ── UI ────────────────────────────────────────────────────────
 function runOptimization(){
-    const st=document.getElementById('status-msg');
-    st.textContent='Optimising…';st.style.color='var(--accent)';
-    // On mobile: collapse sidebar after pressing Run
+    const st2=document.getElementById('status-msg');
+    st2.textContent='Optimising…';st2.style.color='var(--accent)';
     if(isMobile()){
-        const sb=document.getElementById('sidebar');
-        const btn=document.getElementById('sidebarToggle');
-        if(sb.classList.contains('open')){
-            sb.classList.remove('open');
-            btn.classList.remove('open');
-            btn.setAttribute('aria-expanded','false');
-        }
+        const sb=document.getElementById('sidebar'),btn=document.getElementById('sidebarToggle');
+        if(sb.classList.contains('open')){sb.classList.remove('open');btn.classList.remove('open');
+            btn.setAttribute('aria-expanded','false');}
     }
     setTimeout(()=>{
-        const s=solveSystem();
-        buildResults(s);
-        st.textContent='Trace Complete';st.style.color='#666';
-        plotSystem(s);
-        plotSpots(s);
+        const s=solveSystem();buildResults(s);
+        st2.textContent='Trace Complete';st2.style.color='#666';
+        plotSystem(s);plotSpots(s);
     },50);
 }
 
 function buildResults(s){
     const p=document.getElementById('results');
-    const rd=s.final&&Math.abs(s.Rt-s.Rs);
-    const eM_ok=s.final&&Math.abs(s.final.eM)<0.001;
-    const eS_ok=s.final&&Math.abs(s.final.eS)<0.001;
+    const rd=Math.abs(s.Rt-s.Rs);
+    const eM_ok=s.final&&Math.abs(s.final.eM)<0.001,eS_ok=s.final&&Math.abs(s.final.eS)<0.001;
     const fv=f=>`${f.fov_amin.toFixed(2)}′ (${f.fov_deg.toFixed(3)}°)`;
-    const ps=f=>`${f.plateScale.toFixed(2)} ″/mm`;
-    const el=f=>`${(f.EFL/1000).toFixed(3)} m`;
+    const ps=f=>`${f.plateScale.toFixed(2)} ″/mm`,el=f=>`${(f.EFL/1000).toFixed(3)} m`;
+    // M3 ellipse
+    const m3_sag=(2*s.fp.m3_semi_x).toFixed(2);
+    const m3_mer=(2*s.fp.m3_semi_y).toFixed(2);
+    const m3_enc=(2*Math.max(s.fp.m3_semi_x,s.fp.m3_semi_y)).toFixed(2);
     p.innerHTML=`
         <div class="sub-header">M1 + M2 (native)</div>
         <div class="metric-row"><span class="metric-label">F#</span><span class="metric-val val-info">f/${s.starting_f.toFixed(2)}</span></div>
@@ -689,6 +468,15 @@ function buildResults(s){
         <div class="metric-row"><span class="metric-label">FoV (${s.det} mm)</span><span class="metric-val val-warn">${fv(s.fov_eff)}</span></div>
         <div class="metric-row"><span class="metric-label">Spot RMS/max</span>
             <span class="metric-val ${s.stE.rms>s.airE?'val-bad':'val-good'}">${s.stE.rms.toFixed(2)} / ${s.stE.rmax.toFixed(2)} μm</span></div>
+        <div class="sub-header">Mirror Footprints</div>
+        <div class="metric-row"><span class="metric-label">M2 ⌀</span>
+            <span class="metric-val val-info">${s.fp.m2_dia.toFixed(2)} mm</span></div>
+        <div class="metric-row"><span class="metric-label">M3 sag × mer</span>
+            <span class="metric-val val-info">${m3_sag} × ${m3_mer} mm</span></div>
+        <div class="metric-row"><span class="metric-label">M3 encircling ⌀</span>
+            <span class="metric-val">${m3_enc} mm</span></div>
+        <div class="metric-row"><span class="metric-label">M3 axis ratio b/a</span>
+            <span class="metric-val">${(s.fp.m3_semi_y/s.fp.m3_semi_x).toFixed(3)}</span></div>
         <div class="sub-header">M3 Toroid</div>
         <div class="metric-row"><span class="metric-label">Rt (tang.)</span><span class="metric-val">${s.Rt.toFixed(2)} mm</span></div>
         <div class="metric-row"><span class="metric-label">Rs (sag.)</span><span class="metric-val">${s.Rs.toFixed(2)} mm</span></div>
@@ -702,180 +490,169 @@ function buildResults(s){
             <span class="metric-val ${eS_ok?'val-good':'val-bad'}">${s.final?s.final.eS.toExponential(2):'n/a'} mm</span></div>`;
 }
 
-// ── Optical layout ────────────────────────────────────────────
+// ── [24][25] Optical layout with footprint outlines ───────────
 function plotSystem(sol){
-    const traces=[],blue='#00bcd4',orange='#ff9800';
-    function drawConic(surf,dia,color){
-        const y=[],z=[];
-        for(let i=-30;i<=30;i++){
-            const h=(dia/2)*(i/30),r2=h*h;
-            y.push(h);
-            z.push(surf.z0+(surf.c*r2)/(1+Math.sqrt(1-(1+surf.K)*surf.c*surf.c*r2)));
-        }
-        return{x:z,y,mode:'lines',line:{color,width:3},hoverinfo:'none'};
-    }
-    traces.push(drawConic(sol.m1,sol.D1,blue));
-    traces.push(drawConic(sol.m2,sol.D1*0.4,blue));
-    const m3y=[],m3z=[],ap=sol.D1*0.3,Cy=1/sol.Rt;
-    const cT=Math.cos(Math.PI/4),sT=Math.sin(Math.PI/4);
-    for(let i=0;i<61;i++){
-        const yl=ap*((i/60)-0.5),dY=1-Cy*Cy*yl*yl;
-        const zl=dY>0?(Cy*yl*yl)/(1+Math.sqrt(dY)):0;
-        m3y.push(yl*cT+zl*sT); m3z.push(sol.z_m3-yl*sT+zl*cT);
-    }
-    traces.push({x:m3z,y:m3y,mode:'lines',line:{color:orange,width:3},name:'M3',hoverinfo:'none'});
+    const traces=[],blue='#00bcd4',orange='#ff9800',fp_col='rgba(255,180,0,0.55)';
+    const mobile=isMobile();
 
+    function drawConic(surf,dia,color,name=''){
+        const y=[],z=[];
+        for(let i=-40;i<=40;i++){
+            const h=(dia/2)*(i/40),r2=h*h;
+            y.push(h);
+            z.push(surf.z0+(surf.c*r2)/(1+Math.sqrt(Math.max(0,1-(1+surf.K)*surf.c*surf.c*r2))));
+        }
+        return{x:z,y,mode:'lines',line:{color,width:3},name,hoverinfo:'skip'};
+    }
+
+    // M1 full aperture
+    traces.push(drawConic(sol.m1,sol.D1,blue,'M1'));
+
+    // [24] M2 at computed footprint diameter
+    traces.push(drawConic(sol.m2,sol.fp.m2_dia,blue,'M2'));
+
+    // M2 footprint outline — dashed circle (Y-Z projection = horizontal line at ±r)
+    // A circle at z=z_m2 with radius m2_r in Y axis
+    const m2r=sol.fp.m2_dia/2;
+    const th2=Array.from({length:61},(_,i)=>-Math.PI+2*Math.PI*i/60);
+    traces.push({
+        x:th2.map(t=>sol.m2.z0+(sol.m2.c*Math.pow(m2r*Math.sin(t),2))/(1+Math.sqrt(Math.max(0,1-(1+sol.m2.K)*sol.m2.c*sol.m2.c*Math.pow(m2r*Math.sin(t),2))))),
+        y:th2.map(t=>m2r*Math.sin(t)),
+        mode:'lines',line:{color:fp_col,width:1.5,dash:'dot'},
+        name:'M2 footprint',showlegend:false,hoverinfo:'skip'
+    });
+
+    // [25] M3 profile — true toroidal sag (meridional section, x_loc=0)
+    // Drawn at full footprint extent (meridional semi-axis)
+    const m3_mer_ext=sol.fp.m3_semi_y;
+    const Cy=1/sol.Rt,cT=Math.cos(Math.PI/4),sT=Math.sin(Math.PI/4);
+    const m3y=[],m3z=[];
+    for(let i=0;i<81;i++){
+        const yl=m3_mer_ext*((i/80)*2-1),dY=1-Cy*Cy*yl*yl;
+        const zl=dY>0?(Cy*yl*yl)/(1+Math.sqrt(dY)):0;
+        m3y.push(yl*cT+zl*sT);m3z.push(sol.z_m3-yl*sT+zl*cT);
+    }
+    traces.push({x:m3z,y:m3y,mode:'lines',line:{color:orange,width:3},name:'M3',hoverinfo:'skip'});
+
+    // M3 footprint outline — project footprint ellipse boundary onto Y-Z plane
+    // Ellipse in local frame: x=a·cos(t), y=b·sin(t)+cy_offset → global
+    const a=sol.fp.m3_semi_x,b=sol.fp.m3_semi_y;
+    const thE=Array.from({length:61},(_,i)=>2*Math.PI*i/60);
+    const ell_loc_x=thE.map(t=>a*Math.cos(t));
+    const ell_loc_y=thE.map(t=>b*Math.sin(t)+sol.fp.m3_cy);
+    // toGlobalVec for the sag=0 approximation (footprint outline)
+    const ell_gy=[],ell_gz=[];
+    for(let i=0;i<thE.length;i++){
+        ell_gy.push(ell_loc_y[i]*cT);
+        ell_gz.push(sol.z_m3+ell_loc_y[i]*(-sT));
+    }
+    traces.push({x:ell_gz,y:ell_gy,mode:'lines',
+        line:{color:fp_col,width:1.5,dash:'dot'},
+        name:'M3 footprint',showlegend:false,hoverinfo:'skip'});
+
+    // Ray fan
     const dn=parseInt(document.getElementById('ray_density').value);
-    const rx=parseFloat(document.getElementById('ray_len').value);
-    const m3s=new TiltedToroid(sol.z_m3,sol.Rt,sol.Rs,45);
+    const rx2=parseFloat(document.getElementById('ray_len').value);
     const xr=[],yr=[];
     for(let i=0;i<dn;i++){
         const h=(sol.D1/2)*((2*i/(dn-1))-1);
         const h1=sol.m1.intersect(new Ray(new Vec3(0,h,-500),new Vec3(0,0,1)));if(!h1)continue;
-        const h2=sol.m2.intersect(new Ray(h1.point,h1.out_dir));if(!h2)continue;
-        const h3=m3s.intersect(new Ray(h2.point,h2.out_dir));if(!h3)continue;
+        const h2=sol.m2_big.intersect(new Ray(h1.point,h1.out_dir));if(!h2)continue;
+        const h3=sol.m3surf.intersect(new Ray(h2.point,h2.out_dir));if(!h3)continue;
         const tf=(-sol.target_bfl-h3.point.y)/h3.out_dir.y;
-        const pe=h3.point.add(h3.out_dir.mul(tf+rx));
+        const pe=h3.point.add(h3.out_dir.mul(tf+rx2));
         xr.push(-200,h1.point.z,h2.point.z,h3.point.z,pe.z,null);
         yr.push(h,h1.point.y,h2.point.y,h3.point.y,pe.y,null);
     }
-    traces.push({x:xr,y:yr,mode:'lines',line:{color:'rgba(255,255,255,0.2)',width:1},
-                 showlegend:false,hoverinfo:'none'});
+    traces.push({x:xr,y:yr,mode:'lines',line:{color:'rgba(255,255,255,0.18)',width:1},
+        showlegend:false,hoverinfo:'skip'});
 
-    const mobile=isMobile();
     Plotly.newPlot('plotDiv',traces,{
-        title:{text:'Optical Layout (Y–Z Plane)',font:{size:mobile?11:13}},
+        title:{text:'Optical Layout · Footprint outlines (dotted)',font:{size:mobile?11:13}},
         paper_bgcolor:'#050505',plot_bgcolor:'#050505',font:{color:'#aaa',size:mobile?9:11},
         xaxis:{title:{text:'Z (mm)',standoff:mobile?2:6},gridcolor:'#222',zerolinecolor:'#444',
                scaleanchor:'y',scaleratio:1},
         yaxis:{title:{text:'Y (mm)',standoff:mobile?2:6},gridcolor:'#222',zerolinecolor:'#444'},
         margin:mobile?{l:38,r:8,t:30,b:36}:{l:50,r:20,t:40,b:40},
         showlegend:false,dragmode:'pan'
-    },{
-        responsive:true,
-        displayModeBar:!mobile,
-        scrollZoom:!mobile,       // [15] disable scroll-zoom on touch devices
-        modeBarButtonsToRemove:['toImage','lasso2d','select2d']
-    });
+    },{responsive:true,displayModeBar:!mobile,scrollZoom:!mobile,
+       modeBarButtonsToRemove:['toImage','lasso2d','select2d']});
 }
 
 // ── Spot diagrams ─────────────────────────────────────────────
 function plotSpots(sol){
     const mobile=isMobile();
-    function rhoColor(rho){
-        return `hsl(${Math.round(240*(1-rho))},90%,60%)`;
-    }
+    const rhoColor=rho=>`hsl(${Math.round(240*(1-rho))},90%,60%)`;
     function airyCircle(r,xa,ya){
         const th=Array.from({length:101},(_,i)=>2*Math.PI*i/100);
         return{x:th.map(t=>r*Math.cos(t)),y:th.map(t=>r*Math.sin(t)),
                mode:'lines',line:{color:'rgba(255,255,255,0.55)',dash:'dash',width:1.5},
-               showlegend:false,hoverinfo:'none',xaxis:xa,yaxis:ya};
-    }
+               showlegend:false,hoverinfo:'none',xaxis:xa,yaxis:ya};}
 
     const nat_c=sol.spotsNative.map(p=>rhoColor(p.rho));
     const eff_c=sol.spotsEff.map(p=>rhoColor(p.rho));
-    const rN=Math.max(sol.stN.rmax,sol.airN)*1.5;
-    const rE=Math.max(sol.stE.rmax,sol.airE)*1.5;
+    const rN=Math.max(sol.stN.rmax,sol.airN)*1.5,rE=Math.max(sol.stE.rmax,sol.airE)*1.5;
     const lnm=Math.round(sol.lmm*1e6);
     const as={xref:'paper',yref:'paper',showarrow:false,
               font:{size:mobile?8:9,color:'#aaa'},bgcolor:'rgba(0,0,0,0.55)'};
 
-    let traces,layout;
+    const baseTraces=[
+        {x:sol.spotsNative.map(p=>p.x),y:sol.spotsNative.map(p=>p.y),mode:'markers',
+         marker:{color:nat_c,size:3,opacity:0.85},showlegend:false,hoverinfo:'none',xaxis:'x1',yaxis:'y1'},
+        airyCircle(sol.airN,'x1','y1'),
+        {x:sol.spotsEff.map(p=>p.x),y:sol.spotsEff.map(p=>p.z),mode:'markers',
+         marker:{color:eff_c,size:3,opacity:0.85},showlegend:false,hoverinfo:'none',xaxis:'x2',yaxis:'y2'},
+        airyCircle(sol.airE,'x2','y2')
+    ];
 
+    const baseLayout={paper_bgcolor:'#0a0a0a',plot_bgcolor:'#0a0a0a',
+        font:{color:'#aaa',size:mobile?8:10},showlegend:false};
+
+    let layout;
     if(mobile){
-        // [16] Single-column stacked layout on mobile
-        traces=[
-            {x:sol.spotsNative.map(p=>p.x),y:sol.spotsNative.map(p=>p.y),
-             mode:'markers',marker:{color:nat_c,size:3,opacity:0.85},
-             showlegend:false,hoverinfo:'none',xaxis:'x1',yaxis:'y1'},
-            airyCircle(sol.airN,'x1','y1'),
-            {x:sol.spotsEff.map(p=>p.x),y:sol.spotsEff.map(p=>p.z),
-             mode:'markers',marker:{color:eff_c,size:3,opacity:0.85},
-             showlegend:false,hoverinfo:'none',xaxis:'x2',yaxis:'y2'},
-            airyCircle(sol.airE,'x2','y2')
-        ];
-        layout={
-            paper_bgcolor:'#0a0a0a',plot_bgcolor:'#0a0a0a',
-            font:{color:'#aaa',size:8},
-            margin:{l:36,r:8,t:28,b:36},
-            showlegend:false,
+        layout={...baseLayout,margin:{l:36,r:8,t:28,b:36},
             grid:{rows:2,columns:1,pattern:'independent',roworder:'top to bottom'},
-            xaxis :{domain:[0,1],title:{text:'X (μm)',standoff:2},
-                    range:[-rN,rN],gridcolor:'#1e1e1e',zerolinecolor:'#333',
-                    scaleanchor:'y',scaleratio:1},
-            yaxis :{title:{text:'Y (μm)',standoff:2},range:[-rN,rN],
-                    gridcolor:'#1e1e1e',zerolinecolor:'#333'},
-            xaxis2:{domain:[0,1],title:{text:'X sag. (μm)',standoff:2},
-                    range:[-rE,rE],gridcolor:'#1e1e1e',zerolinecolor:'#333',
-                    scaleanchor:'y2',scaleratio:1},
+            xaxis:{domain:[0,1],title:{text:'X (μm)',standoff:2},range:[-rN,rN],
+                   gridcolor:'#1e1e1e',zerolinecolor:'#333',scaleanchor:'y',scaleratio:1},
+            yaxis:{title:{text:'Y (μm)',standoff:2},range:[-rN,rN],gridcolor:'#1e1e1e',zerolinecolor:'#333'},
+            xaxis2:{domain:[0,1],title:{text:'X sag. (μm)',standoff:2},range:[-rE,rE],
+                    gridcolor:'#1e1e1e',zerolinecolor:'#333',scaleanchor:'y2',scaleratio:1},
             yaxis2:{title:{text:'Z mer. (μm)',standoff:2},range:[-rE,rE],
                     gridcolor:'#1e1e1e',zerolinecolor:'#333',anchor:'x2'},
             annotations:[
-                {...as,x:0.5,y:1.0,xanchor:'center',yanchor:'top',
-                 text:`<b>Native f/${sol.starting_f.toFixed(1)}</b>`},
-                {...as,x:0.02,y:0.52,xanchor:'left',yanchor:'top',
-                 text:`RMS ${sol.stN.rms.toFixed(1)}μm · Airy ${sol.airN.toFixed(1)}μm`},
-                {...as,x:0.5,y:0.50,xanchor:'center',yanchor:'top',
-                 text:`<b>Effective f/${sol.final_f.toFixed(1)}</b>`},
-                {...as,x:0.02,y:0.02,xanchor:'left',yanchor:'bottom',
-                 text:`RMS ${sol.stE.rms.toFixed(1)}μm · Airy ${sol.airE.toFixed(1)}μm (λ=${lnm}nm)`},
-            ]
-        };
+                {...as,x:.5,y:1.0,xanchor:'center',yanchor:'top',text:`<b>Native f/${sol.starting_f.toFixed(1)}</b>`},
+                {...as,x:.02,y:.52,xanchor:'left',yanchor:'top',text:`RMS ${sol.stN.rms.toFixed(1)}μm · Airy ${sol.airN.toFixed(1)}μm`},
+                {...as,x:.5,y:.50,xanchor:'center',yanchor:'top',text:`<b>Effective f/${sol.final_f.toFixed(1)}</b>`},
+                {...as,x:.02,y:.02,xanchor:'left',yanchor:'bottom',text:`RMS ${sol.stE.rms.toFixed(1)}μm · Airy ${sol.airE.toFixed(1)}μm (λ=${lnm}nm)`}
+            ]};
     } else {
-        // Desktop: side-by-side
-        traces=[
-            {x:sol.spotsNative.map(p=>p.x),y:sol.spotsNative.map(p=>p.y),
-             mode:'markers',marker:{color:nat_c,size:3,opacity:0.85},
-             showlegend:false,hoverinfo:'none',xaxis:'x1',yaxis:'y1'},
-            airyCircle(sol.airN,'x1','y1'),
-            {x:sol.spotsEff.map(p=>p.x),y:sol.spotsEff.map(p=>p.z),
-             mode:'markers',marker:{color:eff_c,size:3,opacity:0.85},
-             showlegend:false,hoverinfo:'none',xaxis:'x2',yaxis:'y2'},
-            airyCircle(sol.airE,'x2','y2')
-        ];
-        layout={
-            paper_bgcolor:'#0a0a0a',plot_bgcolor:'#0a0a0a',
-            font:{color:'#aaa',size:10},
-            margin:{l:48,r:16,t:34,b:40},
-            showlegend:false,
+        layout={...baseLayout,margin:{l:48,r:16,t:34,b:40},
             grid:{rows:1,columns:2,pattern:'independent'},
-            xaxis :{domain:[0,0.46],title:{text:'X (μm)',standoff:4},
-                    range:[-rN,rN],gridcolor:'#1e1e1e',zerolinecolor:'#333',
-                    scaleanchor:'y',scaleratio:1},
-            yaxis :{title:{text:'Y (μm)',standoff:4},range:[-rN,rN],
-                    gridcolor:'#1e1e1e',zerolinecolor:'#333'},
-            xaxis2:{domain:[0.54,1],title:{text:'X  sagittal (μm)',standoff:4},
-                    range:[-rE,rE],gridcolor:'#1e1e1e',zerolinecolor:'#333',
-                    scaleanchor:'y2',scaleratio:1},
+            xaxis:{domain:[0,.46],title:{text:'X (μm)',standoff:4},range:[-rN,rN],
+                   gridcolor:'#1e1e1e',zerolinecolor:'#333',scaleanchor:'y',scaleratio:1},
+            yaxis:{title:{text:'Y (μm)',standoff:4},range:[-rN,rN],gridcolor:'#1e1e1e',zerolinecolor:'#333'},
+            xaxis2:{domain:[.54,1],title:{text:'X  sagittal (μm)',standoff:4},range:[-rE,rE],
+                    gridcolor:'#1e1e1e',zerolinecolor:'#333',scaleanchor:'y2',scaleratio:1},
             yaxis2:{title:{text:'Z  meridional (μm)',standoff:4},range:[-rE,rE],
                     gridcolor:'#1e1e1e',zerolinecolor:'#333',anchor:'x2'},
             annotations:[
-                {...as,x:0.23,y:1.0,xanchor:'center',yanchor:'top',
+                {...as,x:.23,y:1.0,xanchor:'center',yanchor:'top',
                  text:`<b>Native f/${sol.starting_f.toFixed(2)}</b> · EFL ${(sol.fov_native.EFL/1000).toFixed(2)} m`},
-                {...as,x:0.77,y:1.0,xanchor:'center',yanchor:'top',
+                {...as,x:.77,y:1.0,xanchor:'center',yanchor:'top',
                  text:`<b>Effective f/${sol.final_f.toFixed(2)}</b> · EFL ${(sol.fov_eff.EFL/1000).toFixed(2)} m`},
-                {...as,x:0.01,y:0.01,xanchor:'left',yanchor:'bottom',
+                {...as,x:.01,y:.01,xanchor:'left',yanchor:'bottom',
                  text:`RMS ${sol.stN.rms.toFixed(2)}μm  max ${sol.stN.rmax.toFixed(2)}μm<br>Airy r=${sol.airN.toFixed(2)}μm (λ=${lnm}nm)`},
-                {...as,x:0.54,y:0.01,xanchor:'left',yanchor:'bottom',
-                 text:`RMS ${sol.stE.rms.toFixed(2)}μm  max ${sol.stE.rmax.toFixed(2)}μm<br>Airy r=${sol.airE.toFixed(2)}μm (λ=${lnm}nm)`},
-            ]
-        };
+                {...as,x:.54,y:.01,xanchor:'left',yanchor:'bottom',
+                 text:`RMS ${sol.stE.rms.toFixed(2)}μm  max ${sol.stE.rmax.toFixed(2)}μm<br>Airy r=${sol.airE.toFixed(2)}μm (λ=${lnm}nm)`}
+            ]};
     }
-
-    Plotly.newPlot('spotDiv',traces,layout,
-                   {responsive:true,displayModeBar:false,staticPlot:mobile});
+    Plotly.newPlot('spotDiv',baseTraces,layout,
+        {responsive:true,displayModeBar:false,staticPlot:mobile});
 }
 
-// [20] Resize charts on window resize (handles orientation change)
-let _resizeTimer;
-window.addEventListener('resize',()=>{
-    clearTimeout(_resizeTimer);
-    _resizeTimer=setTimeout(()=>{
-        Plotly.Plots.resize('plotDiv');
-        Plotly.Plots.resize('spotDiv');
-    },150);
-});
-
+let _rt;
+window.addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(()=>{
+    Plotly.Plots.resize('plotDiv');Plotly.Plots.resize('spotDiv');},150);});
 window.onload=runOptimization;
 </script>
 </body>
