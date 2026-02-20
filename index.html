@@ -1,1017 +1,1198 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Vector Ray Trace: Cassegrain + Toroidal M3 — v3.5</title>
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <style>
-        :root {
-            --bg:#121212; --panel:#1e1e1e; --text:#e0e0e0;
-            --accent:#00bcd4; --accent-h:#00acc1;
-            --err:#cf6679; --ok:#03dac6; --warn:#ffb74d;
-            --border:#333; --input-bg:#2d2d2d; --sidebar-w:340px;
-            --zemax:#7c4dff; --zemax-h:#651fff;
-        }
-        *,*::before,*::after{box-sizing:border-box;}
-        html{height:100%;}
-        body{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
-             background:var(--bg);color:var(--text);margin:0;padding:0;
-             display:flex;height:100%;overflow:hidden;}
-        ::-webkit-scrollbar{width:6px;height:6px;}
-        ::-webkit-scrollbar-track{background:var(--bg);}
-        ::-webkit-scrollbar-thumb{background:#444;border-radius:3px;}
-
-        /* ── Sidebar ──────────────────────────────────────────── */
-        .sidebar{width:var(--sidebar-w);background:var(--panel);
-                 border-right:1px solid var(--border);display:flex;
-                 flex-direction:column;padding:18px 16px;overflow-y:auto;
-                 flex-shrink:0;box-shadow:4px 0 15px rgba(0,0,0,.5);z-index:20;}
-        .mobile-toggle{display:none;width:100%;background:var(--panel);
-                       border:none;border-bottom:1px solid var(--border);
-                       color:var(--accent);font-size:.85rem;font-weight:700;
-                       letter-spacing:.5px;padding:12px 16px;text-align:left;
-                       cursor:pointer;position:sticky;top:0;z-index:30;flex-shrink:0;}
-        .mobile-toggle svg{float:right;transition:transform .25s;}
-        .mobile-toggle.open svg{transform:rotate(180deg);}
-
-        /* ── Main ─────────────────────────────────────────────── */
-        .main-content{flex:1;display:flex;flex-direction:column;
-                      background:#050505;min-width:0;overflow:hidden;}
-        #plotDiv{flex:1;min-height:0;}
-        #spotDiv{height:300px;flex-shrink:0;border-top:1px solid var(--border);}
-
-        /* ── Typography ───────────────────────────────────────── */
-        h1{margin:0 0 2px;font-size:1.15rem;color:var(--accent);letter-spacing:.5px;}
-        .version-tag{font-size:.62rem;color:#555;font-family:'Consolas',monospace;
-                     margin-bottom:12px;letter-spacing:.5px;}
-        h2{margin:0 0 16px;font-size:.75rem;opacity:.55;font-weight:normal;text-transform:uppercase;}
-        .section-header{font-size:.72rem;font-weight:700;color:#777;margin:14px 0 7px;
-                        text-transform:uppercase;letter-spacing:1px;
-                        border-bottom:1px solid #2a2a2a;padding-bottom:3px;}
-        .input-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-        .input-group{margin-bottom:7px;}
-        .input-group label{display:block;font-size:.72rem;margin-bottom:3px;color:#999;}
-        .input-group input[type="number"],
-        .input-group input[type="range"]{
-            width:100%;background:var(--input-bg);border:1px solid #444;
-            color:#fff;padding:7px 8px;border-radius:4px;
-            font-family:'Consolas',monospace;font-size:16px;
-            transition:border-color .2s,background .2s;-webkit-appearance:none;}
-        .input-group input[type="number"]:focus{outline:none;border-color:var(--accent);background:#383838;}
-        .input-group input[type="range"]{padding:0;height:36px;background:transparent;
-                                         border:none;cursor:pointer;touch-action:manipulation;}
-        .input-group input[type="range"]::-webkit-slider-runnable-track{background:#444;height:4px;border-radius:2px;}
-        .input-group input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;
-            width:20px;height:20px;border-radius:50%;background:var(--accent);margin-top:-8px;}
-
-        /* ── Buttons ─────────────────────────────────────────── */
-        .btn-row{display:flex;gap:8px;margin-top:16px;}
-        button.run-btn{flex:2;padding:14px;background:var(--accent);color:#000;
-                       border:none;border-radius:5px;font-weight:700;font-size:.85rem;
-                       cursor:pointer;text-transform:uppercase;letter-spacing:1px;
-                       min-height:48px;transition:all .2s;box-shadow:0 4px 8px rgba(0,0,0,.4);
-                       touch-action:manipulation;}
-        button.run-btn:hover{background:var(--accent-h);transform:translateY(-1px);}
-        button.run-btn:active{transform:translateY(1px);}
-        button.zemax-btn{flex:1;padding:14px;background:var(--zemax);color:#fff;
-                         border:none;border-radius:5px;font-weight:700;font-size:.78rem;
-                         cursor:pointer;text-transform:uppercase;letter-spacing:.8px;
-                         min-height:48px;transition:all .2s;box-shadow:0 4px 8px rgba(0,0,0,.4);
-                         touch-action:manipulation;line-height:1.2;}
-        button.zemax-btn:hover{background:var(--zemax-h);transform:translateY(-1px);}
-        button.zemax-btn:active{transform:translateY(1px);}
-        button.zemax-btn:disabled{background:#3a3a3a;color:#666;cursor:not-allowed;transform:none;}
-
-        /* ── Results ─────────────────────────────────────────── */
-        .results-panel{margin-top:16px;background:#252525;padding:13px;border-radius:5px;
-                       border-left:3px solid var(--accent);font-family:'Consolas',monospace;font-size:.82rem;}
-        .metric-row{display:flex;justify-content:space-between;margin-bottom:4px;}
-        .metric-label{color:#777;} .metric-val{color:#fff;font-weight:700;}
-        .val-good{color:var(--ok);} .val-bad{color:var(--err);}
-        .val-info{color:var(--accent);} .val-warn{color:var(--warn);}
-        .sub-header{font-size:.68rem;color:#555;text-transform:uppercase;letter-spacing:1px;
-                    margin:9px 0 4px;border-top:1px solid #2a2a2a;padding-top:7px;}
-        .tooltip{font-size:.67rem;color:#4a4a4a;margin-top:6px;font-style:italic;line-height:1.4;}
-        .status-bar{padding:4px 10px;background:#111;border-top:1px solid var(--border);
-                    font-size:.7rem;color:#555;display:flex;justify-content:space-between;flex-shrink:0;}
-
-        /* ═══════════════════════════════════════════════════════
-           ZEMAX MODAL
-           ═══════════════════════════════════════════════════ */
-        .modal-backdrop{
-            display:none;position:fixed;inset:0;
-            background:rgba(0,0,0,.75);z-index:1000;
-            align-items:center;justify-content:center;
-            padding:16px;}
-        .modal-backdrop.open{display:flex;}
-        .modal{
-            background:#1a1a1a;border:1px solid var(--zemax);
-            border-radius:8px;width:100%;max-width:780px;
-            max-height:90vh;display:flex;flex-direction:column;
-            box-shadow:0 8px 40px rgba(124,77,255,.3);}
-        .modal-header{
-            display:flex;align-items:center;justify-content:space-between;
-            padding:14px 20px;border-bottom:1px solid #333;flex-shrink:0;}
-        .modal-header h3{margin:0;font-size:1rem;color:var(--zemax);letter-spacing:.5px;}
-        .modal-header .close-btn{
-            background:none;border:none;color:#666;font-size:1.4rem;
-            cursor:pointer;padding:0 4px;line-height:1;transition:color .2s;}
-        .modal-header .close-btn:hover{color:#fff;}
-
-        /* Tabs */
-        .tab-bar{display:flex;gap:0;border-bottom:1px solid #333;flex-shrink:0;}
-        .tab-btn{
-            padding:10px 20px;background:none;border:none;border-bottom:2px solid transparent;
-            color:#666;font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;
-            cursor:pointer;transition:all .15s;margin-bottom:-1px;}
-        .tab-btn:hover{color:#aaa;}
-        .tab-btn.active{color:var(--zemax);border-bottom-color:var(--zemax);}
-
-        /* Tab content */
-        .tab-content{flex:1;overflow-y:auto;padding:20px;}
-        .tab-pane{display:none;}
-        .tab-pane.active{display:block;}
-
-        /* LDE table */
-        .lde-block{
-            font-family:'Consolas','Courier New',monospace;font-size:.78rem;
-            background:#0d0d0d;border:1px solid #2a2a2a;border-radius:4px;
-            padding:14px;overflow-x:auto;white-space:pre;line-height:1.55;
-            color:#ccc;}
-        .lde-head{color:var(--zemax);}
-        .lde-sep{color:#444;}
-        .lde-mirror{color:#00bcd4;}
-        .lde-cb{color:#ffb74d;}
-        .lde-toroid{color:var(--zemax);}
-        .lde-img{color:#888;}
-
-        /* Steps */
-        .steps-block{font-size:.85rem;line-height:1.65;color:#ccc;}
-        .step{margin-bottom:18px;}
-        .step-num{display:inline-block;width:22px;height:22px;border-radius:50%;
-                  background:var(--zemax);color:#fff;font-size:.7rem;font-weight:700;
-                  text-align:center;line-height:22px;margin-right:8px;flex-shrink:0;}
-        .step-title{color:#fff;font-weight:600;font-size:.88rem;}
-        .step-body{margin-top:6px;padding-left:30px;color:#aaa;}
-        .param-box{
-            background:#0d0d0d;border:1px solid #2a2a2a;border-left:3px solid var(--zemax);
-            border-radius:3px;padding:10px 14px;margin-top:8px;
-            font-family:'Consolas',monospace;font-size:.8rem;line-height:1.7;color:#ccc;}
-        .param-key{color:#ffb74d;}
-        .param-val{color:var(--ok);}
-        .warn-box{
-            background:#1a1200;border:1px solid #664d00;border-radius:4px;
-            padding:8px 12px;margin-top:8px;font-size:.78rem;color:#ffb74d;}
-
-        /* Copy buttons */
-        .copy-bar{display:flex;justify-content:flex-end;margin-top:10px;}
-        .copy-btn{
-            background:#252525;border:1px solid #444;color:#aaa;
-            padding:6px 14px;border-radius:4px;font-size:.75rem;cursor:pointer;
-            transition:all .15s;letter-spacing:.5px;}
-        .copy-btn:hover{background:#333;color:#fff;border-color:#666;}
-        .copy-btn.copied{background:#1a3a2a;border-color:var(--ok);color:var(--ok);}
-
-        /* System info box at top of modal */
-        .sysinfo{
-            display:flex;flex-wrap:wrap;gap:8px;
-            padding:12px 20px;border-bottom:1px solid #2a2a2a;
-            background:#141414;flex-shrink:0;}
-        .sysinfo-chip{
-            background:#252525;border:1px solid #333;border-radius:20px;
-            padding:4px 12px;font-size:.75rem;font-family:'Consolas',monospace;}
-        .sysinfo-chip span{color:var(--accent);font-weight:700;}
-
-        /* ── Mobile ───────────────────────────────────────────── */
-        @media(max-width:900px){:root{--sidebar-w:280px;}#spotDiv{height:260px;}}
-        @media(max-width:640px){
-            body{flex-direction:column;height:auto;min-height:100%;overflow:hidden;overflow-y:auto;}
-            .mobile-toggle{display:block;}
-            .sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border);
-                     box-shadow:none;overflow:hidden;max-height:0;padding:0 16px;
-                     transition:max-height .35s ease,padding .35s ease;}
-            .sidebar.open{max-height:2000px;padding:16px;overflow-y:auto;}
-            .main-content{overflow:visible;flex:none;}
-            #plotDiv{flex:none;height:max(280px,70vw);}
-            #spotDiv{height:520px;flex:none;}
-            .input-group input[type="number"]{padding:10px 8px;}
-            .modal{max-height:95vh;border-radius:6px;}
-            .lde-block{font-size:.68rem;}
-            .tab-btn{padding:8px 12px;font-size:.72rem;}
-        }
-        @media(max-width:380px){.input-grid{grid-template-columns:1fr;}}
-        @supports(padding:max(0px)){
-            .sidebar,.mobile-toggle{
-                padding-left:max(16px,env(safe-area-inset-left));
-                padding-right:max(16px,env(safe-area-inset-right));}
-            .status-bar{padding-bottom:max(4px,env(safe-area-inset-bottom));}
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Cassegrain v7.0 (Grid & Resizers)</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+:root{--bg:#121212;--panel:#1e1e1e;--accent:#00bcd4;--ah:#00acc1;--err:#cf6679;
+      --ok:#03dac6;--warn:#ffb74d;--bdr:#333;--ibg:#2d2d2d;--sw:350px;
+      --zemax:#7c4dff;--lens:#4caf50;--calc:#ff9800;}
+*,*::before,*::after{box-sizing:border-box;}
+html{height:100%;}
+body{font-family:'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:#e0e0e0;
+     margin:0;padding:0;display:flex;height:100%;overflow:hidden;}
+::-webkit-scrollbar{width:6px;} ::-webkit-scrollbar-thumb{background:#444;border-radius:3px;}
+.sb{width:var(--sw);background:var(--panel);
+    display:flex;flex-direction:column;padding:16px;overflow-y:auto;flex-shrink:0;}
+.resizer-h{width:6px;background:#252525;cursor:ew-resize;flex-shrink:0;z-index:10;
+           border-left:1px solid #111;border-right:1px solid #333;transition:background 0.2s;}
+.resizer-v{height:6px;background:#252525;cursor:ns-resize;flex-shrink:0;z-index:10;
+           border-top:1px solid #111;border-bottom:1px solid #333;transition:background 0.2s;}
+.resizer-h:hover, .resizer-v:hover{background:var(--accent);}
+.mc{flex:1;display:flex;flex-direction:column;background:#050505;min-width:0;overflow:hidden;}
+#plotDiv{flex:1;min-height:0;}
+.srow{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+      height:400px;flex-shrink:0;background:var(--bdr);gap:1px;}
+.spot-chart{background:#0a0a0a;min-width:0;min-height:0;}
+h1{margin:0 0 2px;font-size:1.1rem;color:var(--accent);}
+.vtag{font-size:.6rem;color:#555;font-family:Consolas,monospace;margin-bottom:10px;}
+h2{margin:0 0 10px;font-size:.7rem;opacity:.45;font-weight:normal;text-transform:uppercase;}
+.sh{font-size:.7rem;font-weight:700;color:#666;margin:12px 0 6px;text-transform:uppercase;
+    letter-spacing:1px;border-bottom:1px solid #252525;padding-bottom:2px;}
+.ig{margin-bottom:6px;}
+.ig label{display:block;font-size:.7rem;margin-bottom:2px;color:#888;}
+.ig input[type=number],.ig input[type=range],.ig select{width:100%;background:var(--ibg);
+    border:1px solid #444;color:#fff;padding:6px 8px;border-radius:4px;
+    font-family:Consolas,monospace;font-size:16px;-webkit-appearance:none;}
+.ig input[type=number]:focus,.ig select:focus{outline:none;border-color:var(--accent);}
+.ig input[type=number].calc-out{background:#1a1200;border-color:#664400;color:var(--calc);}
+.ig input[type=range]{padding:0;height:32px;background:transparent;border:none;cursor:pointer;}
+.ig input[type=range]::-webkit-slider-runnable-track{background:#444;height:4px;border-radius:2px;}
+.ig input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;
+    border-radius:50%;background:var(--accent);margin-top:-7px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.trow{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.trow label{font-size:.73rem;color:#aaa;cursor:pointer;user-select:none;}
+input[type=checkbox]{width:15px;height:15px;accent-color:var(--lens);cursor:pointer;}
+.preset-bar{display:flex;gap:6px;margin-bottom:10px;}
+.pb-btn{flex:1;padding:8px 4px;border:1px solid #444;background:#252525;color:#aaa;
+        border-radius:4px;font-size:.73rem;font-weight:600;cursor:pointer;text-align:center;
+        transition:all .15s;line-height:1.3;}
+.pb-btn:hover{background:#333;color:#fff;border-color:#666;}
+.pb-btn.active{background:#0d2a2a;border-color:var(--accent);color:var(--accent);}
+.calc-badge{display:inline-block;font-size:.58rem;padding:1px 5px;border-radius:8px;
+            background:#2a1500;border:1px solid #664400;color:var(--calc);
+            vertical-align:middle;margin-left:4px;}
+.brow{display:flex;gap:8px;margin-top:14px;}
+.runb{flex:2;padding:13px;background:var(--accent);color:#000;border:none;border-radius:5px;
+      font-weight:700;font-size:.83rem;cursor:pointer;text-transform:uppercase;}
+.runb:hover{background:var(--ah);}
+.zmxb{flex:1;padding:13px;background:var(--zemax);color:#fff;border:none;border-radius:5px;
+      font-weight:700;font-size:.76rem;cursor:pointer;text-transform:uppercase;line-height:1.2;}
+.zmxb:hover{background:#651fff;}
+.zmxb:disabled{background:#333;color:#555;cursor:not-allowed;}
+.calc-panel{background:#181200;border:1px solid #443300;border-radius:4px;
+            padding:8px 10px;margin-top:6px;font-family:Consolas,monospace;font-size:.74rem;}
+.calc-row{display:flex;justify-content:space-between;margin-bottom:2px;}
+.calc-lbl{color:#886644;} .calc-val{color:var(--calc);font-weight:700;}
+.rp{margin-top:14px;background:#232323;padding:12px;border-radius:5px;
+    border-left:3px solid var(--accent);font-family:Consolas,monospace;font-size:.8rem;}
+.mr{display:flex;justify-content:space-between;margin-bottom:3px;}
+.ml{color:#666;} .mv{color:#fff;font-weight:700;}
+.vg{color:var(--ok);} .vb{color:var(--err);} .vi{color:var(--accent);} .vw{color:var(--warn);}
+.srh{font-size:.66rem;color:#555;text-transform:uppercase;letter-spacing:1px;
+     margin:8px 0 3px;border-top:1px solid #252525;padding-top:6px;}
+.stb{padding:4px 10px;background:#0d0d0d;border-top:1px solid var(--bdr);
+     font-size:.68rem;color:#444;display:flex;justify-content:space-between;flex-shrink:0;}
+.toast{position:fixed;bottom:18px;right:18px;z-index:9999;background:#1a3a2a;
+       border:1px solid var(--ok);border-radius:5px;padding:9px 14px;font-size:.78rem;
+       color:var(--ok);font-family:Consolas,monospace;opacity:0;transition:opacity .3s;}
+.toast.on{opacity:1;}
+.agfbox{border:1px dashed #3a5a3a;border-radius:5px;padding:9px 11px;
+        background:#111a11;margin-bottom:8px;}
+.agflbl{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.73rem;
+        color:var(--lens);font-weight:600;}
+.agfst{font-size:.68rem;color:#555;margin-top:3px;font-family:Consolas,monospace;line-height:1.4;}
+.chips{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px;}
+.chip{background:#1a3a2a;border:1px solid #2a5a3a;border-radius:10px;padding:2px 7px;
+      font-size:.63rem;color:var(--ok);font-family:Consolas,monospace;}
+.mpick .mfrow{display:flex;gap:5px;margin-bottom:4px;}
+.mpick .mfrow input[type=text]{flex:1;background:var(--ibg);border:1px solid #444;color:#fff;
+    padding:6px 8px;border-radius:4px;font-family:Consolas,monospace;font-size:14px;}
+.mpick .mfrow input:focus{outline:none;border-color:var(--lens);}
+.mpick .mfrow button{padding:5px 9px;background:#1e2e1e;border:1px solid #3a6a3a;
+    color:var(--lens);border-radius:4px;cursor:pointer;font-size:.72rem;}
+select#msel{width:100%;background:var(--ibg);border:1px solid #444;color:#fff;
+    padding:6px 8px;border-radius:4px;font-family:Consolas,monospace;font-size:14px;
+    -webkit-appearance:none;cursor:pointer;}
+select#msel option{background:#1e1e1e;}
+.minf{font-size:.68rem;color:#555;margin-top:3px;font-family:Consolas,monospace;}
+.zmode{font-size:.7rem;color:#aaa;margin-top:6px;}
+.zmode label{margin-right:10px;cursor:pointer;}
+.mbd{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;
+     align-items:center;justify-content:center;padding:14px;}
+.mbd.open{display:flex;}
+.mdl{background:#1a1a1a;border:1px solid var(--zemax);border-radius:7px;width:100%;
+     max-width:780px;max-height:90vh;display:flex;flex-direction:column;
+     box-shadow:0 8px 40px rgba(124,77,255,.3);}
+.mhd{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;
+     border-bottom:1px solid #2a2a2a;flex-shrink:0;}
+.mhd h3{margin:0;font-size:.95rem;color:var(--zemax);}
+.xcls{background:none;border:none;color:#555;font-size:1.3rem;cursor:pointer;padding:0 3px;}
+.xcls:hover{color:#fff;}
+.si{display:flex;flex-wrap:wrap;gap:7px;padding:11px 18px;
+    border-bottom:1px solid #222;background:#111;flex-shrink:0;}
+.sc{background:#222;border:1px solid #2a2a2a;border-radius:18px;padding:3px 11px;
+    font-size:.73rem;font-family:Consolas,monospace;}
+.sc span{color:var(--accent);font-weight:700;}
+.tbar{display:flex;border-bottom:1px solid #2a2a2a;flex-shrink:0;}
+.tb{padding:9px 16px;background:none;border:none;border-bottom:2px solid transparent;
+    color:#555;font-size:.77rem;font-weight:600;text-transform:uppercase;letter-spacing:.8px;
+    cursor:pointer;margin-bottom:-1px;transition:all .15s;}
+.tb.act{color:var(--zemax);border-bottom-color:var(--zemax);}
+.tc{flex:1;overflow-y:auto;padding:18px;}
+.tp{display:none;} .tp.act{display:block;}
+.lde{font-family:Consolas,monospace;font-size:.76rem;background:#0a0a0a;border:1px solid #222;
+     border-radius:4px;padding:13px;overflow-x:auto;white-space:pre;line-height:1.55;color:#bbb;}
+.stps{font-size:.82rem;line-height:1.6;color:#bbb;}
+.stp{margin-bottom:14px;padding:11px;background:#111;border-radius:4px;
+     border-left:3px solid var(--zemax);}
+.stt{color:#fff;font-weight:700;margin-bottom:5px;}
+.stb2{color:#999;font-size:.78rem;}
+.pb2{background:#080808;border:1px solid #1e1e1e;border-radius:3px;padding:7px 11px;
+    margin-top:5px;font-family:Consolas,monospace;font-size:.77rem;line-height:1.65;}
+.wb{background:#140e00;border:1px solid #503000;border-radius:3px;padding:6px 10px;
+    margin-top:5px;font-size:.76rem;color:var(--warn);}
+.cbr{display:flex;justify-content:flex-end;margin-top:8px;}
+.cpb{background:#222;border:1px solid #3a3a3a;color:#888;padding:5px 13px;
+     border-radius:4px;font-size:.73rem;cursor:pointer;}
+.cpb:hover{background:#2e2e2e;color:#fff;}
+.cpb.ok{background:#0a2a1a;border-color:var(--ok);color:var(--ok);}
+</style>
 </head>
 <body>
 
-<!-- Mobile toggle ─────────────────────────────────────────── -->
-<button class="mobile-toggle" id="sidebarToggle"
-        onclick="toggleSidebar()" aria-expanded="false" aria-controls="sidebar">
-    ☰ &nbsp;Parameters
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <polyline points="2,4 7,10 12,4" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-</button>
+<div class="sb" id="sb">
+<header>
+  <h1>Cassegrain Optimiser</h1>
+  <div class="vtag">v7.0 · Grid Layout & Active Resizers</div>
+  <h2>3D Vector Ray Trace Engine</h2>
+</header>
 
-<!-- Sidebar ───────────────────────────────────────────────── -->
-<div class="sidebar" id="sidebar" role="complementary" aria-label="System parameters">
-    <header>
-        <h1>Cassegrain Optimiser</h1>
-        <div class="version-tag">v3.5 · True Toroid · 2×2 Newton · Zemax Export</div>
-        <h2>3D Vector Ray Trace Engine</h2>
-    </header>
-
-    <div class="section-header">Primary Mirror (M1)</div>
-    <div class="input-grid">
-        <div class="input-group"><label for="m1_dia">Diameter (mm)</label>
-            <input type="number" id="m1_dia" value="600" inputmode="decimal"></div>
-        <div class="input-group"><label for="m1_roc">Radius (neg, mm)</label>
-            <input type="number" id="m1_roc" value="-2447.7" inputmode="decimal"></div>
-    </div>
-    <div class="input-group"><label for="m1_k">Conic constant (k)</label>
-        <input type="number" id="m1_k" value="-1" inputmode="decimal"></div>
-
-    <div class="section-header">Secondary Mirror (M2)</div>
-    <div class="input-grid">
-        <div class="input-group"><label for="m2_roc">Radius (neg, mm)</label>
-            <input type="number" id="m2_roc" value="-272.2" inputmode="decimal"></div>
-        <div class="input-group"><label for="m2_k">Conic constant (k)</label>
-            <input type="number" id="m2_k" value="-1.4336" inputmode="decimal"></div>
-    </div>
-    <div class="input-group"><label for="d1">Dist. from M1 (mm)</label>
-        <input type="number" id="d1" value="1100" inputmode="decimal"></div>
-
-    <div class="section-header">Fold Mirror (M3) — Toroid</div>
-    <div class="input-grid">
-        <div class="input-group"><label for="m3_back">Dist. behind M1 (mm)</label>
-            <input type="number" id="m3_back" value="100" inputmode="decimal"></div>
-        <div class="input-group"><label for="target_bfl">Target BFL (mm)</label>
-            <input type="number" id="target_bfl" value="50" inputmode="decimal"></div>
-    </div>
-
-    <div class="section-header">Settings</div>
-    <div class="input-grid">
-        <div class="input-group"><label for="ray_density">Ray Density</label>
-            <input type="range" id="ray_density" min="3" max="25" value="7"></div>
-        <div class="input-group"><label for="ray_len">Ray Extension (mm)</label>
-            <input type="range" id="ray_len" min="0" max="500" value="50" step="10"></div>
-        <div class="input-group"><label for="det_diag">Detector Diagonal (mm)</label>
-            <input type="number" id="det_diag" value="20" min="1" max="200" inputmode="decimal"></div>
-        <div class="input-group"><label for="lambda_nm">Spot λ (nm)</label>
-            <input type="number" id="lambda_nm" value="550" min="300" max="1100" step="10" inputmode="decimal"></div>
-    </div>
-
-    <div class="btn-row">
-        <button class="run-btn" onclick="runOptimization()">▶ Run Solver</button>
-        <button class="zemax-btn" id="zemaxBtn" onclick="openZemax()" disabled
-                title="Run solver first">
-            ⬡ Zemax<br>Export
-        </button>
-    </div>
-
-    <div class="results-panel" id="results">
-        <div style="text-align:center;color:#444;padding:8px 0;">Waiting for trace…</div>
-    </div>
-    <div class="tooltip">
-        *2×2 Newton solver · true toroidal sag.<br>
-        †Footprints: filled 20-ring pupil, no margin.<br>
-        ‡Zemax export: live values from last solve.
-    </div>
+<div class="sh">Preset Systems</div>
+<div class="preset-bar">
+  <div class="pb-btn active" id="pre0" onclick="loadPreset(0)">Case 1<br><span style="font-size:.65rem;color:#aaa">Compact f/4</span></div>
+  <div class="pb-btn" id="pre1" onclick="loadPreset(1)">Case 2<br><span style="font-size:.65rem;color:#aaa">Long-focus</span></div>
+  <div class="pb-btn" id="pre2" onclick="loadPreset(2)">Custom<br><span style="font-size:.65rem;color:#aaa">User input</span></div>
 </div>
 
-<!-- Main content ─────────────────────────────────────────── -->
-<div class="main-content" role="main">
-    <div id="plotDiv"></div>
-    <div id="spotDiv"></div>
-    <div class="status-bar">
-        <span id="status-msg">System Ready</span>
-        <span>v3.5</span>
-    </div>
+<div class="sh">Glass Catalogues (.AGF)</div>
+<div class="agfbox">
+  <label class="agflbl" for="agff">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    Click to load Zemax .AGF files
+  </label>
+  <input type="file" id="agff" accept=".agf" multiple style="display:none" onchange="loadAGF(this)">
+  <div class="agfst" id="agfst">No .agf loaded — 8 built‑in glasses active</div>
+  <div class="chips" id="chips"></div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     ZEMAX MODAL
-     ═══════════════════════════════════════════════════════ -->
-<div class="modal-backdrop" id="zemaxModal" role="dialog"
-     aria-modal="true" aria-labelledby="modalTitle"
-     onclick="handleBackdropClick(event)">
-    <div class="modal">
-        <div class="modal-header">
-            <h3 id="modalTitle">⬡ &nbsp;Zemax OpticStudio 2025 — System Prescription</h3>
-            <button class="close-btn" onclick="closeZemax()" aria-label="Close">✕</button>
-        </div>
+<div class="sh">Field Corrector Material</div>
+<div class="mpick">
+  <div class="mfrow">
+    <input type="text" id="mflt" placeholder="Filter by name…" oninput="fltMat()" autocomplete="off" spellcheck="false">
+    <button onclick="clrFlt()">✕</button>
+  </div>
+  <select id="msel" size="4" onchange="pickMat()"></select>
+  <div class="minf" id="minf"></div>
+</div>
+<div class="zmode">
+  <label><input type="checkbox" id="autoGlass" checked onchange="updateGlassMode()"> auto‑pick closest n<sub>d</sub></label>
+</div>
 
-        <!-- System info chips -->
-        <div class="sysinfo" id="modal-sysinfo"></div>
+<div class="sh">Primary Mirror (M1)</div>
+<div class="grid2">
+  <div class="ig"><label>Diameter (mm)</label><input type="number" id="m1d" value="600" inputmode="decimal" step="any"></div>
+  <div class="ig"><label>Radius (neg, mm)</label><input type="number" id="m1r" value="-2447.7" inputmode="decimal" step="any"></div>
+</div>
+<div class="ig"><label>Conic constant k</label><input type="number" id="m1k" value="-1" inputmode="decimal" step="any"></div>
 
-        <!-- Tabs -->
-        <div class="tab-bar">
-            <button class="tab-btn active" onclick="switchTab('lde',this)">LDE Prescription</button>
-            <button class="tab-btn" onclick="switchTab('steps',this)">Step-by-Step Guide</button>
-            <button class="tab-btn" onclick="switchTab('pitfalls',this)">⚠ Pitfalls</button>
-        </div>
+<div class="sh">Secondary Mirror (M2)</div>
+<div class="grid2">
+  <div class="ig"><label>Radius (neg, mm)</label><input type="number" id="m2r" value="-272.2" inputmode="decimal" step="any"></div>
+  <div class="ig"><label>Conic constant k</label><input type="number" id="m2k" value="-1.4336" inputmode="decimal" step="any"></div>
+</div>
+<div class="ig"><label>M2 distance from M1 (mm)</label><input type="number" id="d1" value="1100" inputmode="decimal" step="any"></div>
 
-        <!-- Tab: LDE Prescription -->
-        <div class="tab-content">
-            <div class="tab-pane active" id="tab-lde">
-                <p style="font-size:.8rem;color:#666;margin:0 0 12px;">
-                    Copy this table into the Zemax <strong>Lens Data Editor</strong>.
-                    Surface 5 uses the <strong>Toroidal</strong> surface type —
-                    enter R<sub>s</sub> in <em>Extra Data Editor → Par 1</em>.
-                </p>
-                <div class="lde-block" id="lde-text"></div>
-                <div class="copy-bar">
-                    <button class="copy-btn" onclick="copySection('lde-text',this)">Copy LDE</button>
-                </div>
-            </div>
+<div class="sh">Fold Mirror (M3) — Toroid</div>
+<div class="grid2">
+  <div class="ig"><label>Dist. behind M1 (mm)</label><input type="number" id="m3b" value="100" inputmode="decimal" step="any"></div>
+  <div class="ig"><label>Target BFL (mm)</label><input type="number" id="bfl" value="50" inputmode="decimal" step="any"></div>
+</div>
 
-            <!-- Tab: Step-by-step -->
-            <div class="tab-pane" id="tab-steps">
-                <div class="steps-block" id="steps-text"></div>
-                <div class="copy-bar">
-                    <button class="copy-btn" onclick="copySection('steps-text',this)">Copy Steps</button>
-                </div>
-            </div>
-
-            <!-- Tab: Pitfalls -->
-            <div class="tab-pane" id="tab-pitfalls">
-                <div class="steps-block" id="pitfalls-text"></div>
-            </div>
-        </div>
+<div class="sh">Field Corrector Lens</div>
+<div class="trow">
+  <input type="checkbox" id="len" onchange="toggleLens()">
+  <label for="len">Enable field corrector</label>
+</div>
+<div id="lpan" style="display:none">
+  <div class="grid2">
+    <div class="ig">
+      <label>Position before BFL (mm)</label>
+      <input type="number" id="lpos" value="6" min="1" inputmode="decimal" step="any">
     </div>
+    <div class="ig">
+      <label>Front radius R1 (mm) <span class="calc-badge">AUTO</span></label>
+      <input type="number" id="lr1" value="32.7" inputmode="decimal" class="calc-out" readonly>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="ig">
+      <label>Rear radius R2 (0=plano)</label>
+      <input type="number" id="lr2" value="0" inputmode="decimal" step="any">
+    </div>
+    <div class="ig">
+      <label>CT (mm) <span class="calc-badge">AUTO</span></label>
+      <input type="number" id="lct" value="2.8" min="0.5" inputmode="decimal" class="calc-out" readonly>
+    </div>
+  </div>
+  <div class="calc-panel" id="calc-panel">
+    <div class="calc-row"><span class="calc-lbl">Petzval (mirrors)</span><span class="calc-val" id="cv-petz">--</span></div>
+    <div class="calc-row"><span class="calc-lbl">f_corr (Petzval flat)</span><span class="calc-val" id="cv-fcorr">--</span></div>
+    <div class="calc-row"><span class="calc-lbl">Beam dia at lens</span><span class="calc-val" id="cv-bdia">--</span></div>
+    <div class="calc-row"><span class="calc-lbl">Lens aperture</span><span class="calc-val" id="cv-ldia">--</span></div>
+  </div>
+</div>
+
+<div class="sh">Settings</div>
+<div class="grid2">
+  <div class="ig"><label>Ray density</label><input type="range" id="rdn" min="3" max="25" value="7"></div>
+  <div class="ig"><label>Ray extension (mm)</label><input type="range" id="rex" min="0" max="500" value="50" step="10"></div>
+  <div class="ig"><label>Detector diagonal (mm)</label><input type="number" id="det" value="20" min="1" max="200" inputmode="decimal" step="any"></div>
+  <div class="ig"><label>Wavelength (nm)</label><input type="number" id="lnm" value="550" min="300" max="1100" step="10" inputmode="decimal"></div>
+</div>
+
+<div class="brow">
+  <button class="runb" onclick="RUN()">▶ Run Solver</button>
+  <button class="zmxb" id="zb" onclick="openZ()" disabled>⟳ Zemax<br>Export</button>
+</div>
+<div class="rp" id="res"><div style="text-align:center;color:#333;padding:8px">Click Run to trace…</div></div>
+<div style="font-size:.65rem;color:#363636;margin-top:5px;font-style:italic">
+  AUTO lens: Petzval‑flattening thin‑lens; glass auto‑picked by n<sub>d</sub> if enabled.
+</div>
+</div>
+
+<div class="resizer-h" id="resizerH"></div>
+
+<div class="mc">
+  <div id="plotDiv"></div>
+  <div class="resizer-v" id="resizerV"></div>
+  <div class="srow" id="srow">
+    <div id="s0" class="spot-chart"></div>
+    <div id="s1" class="spot-chart"></div>
+    <div id="s2" class="spot-chart"></div>
+    <div id="s3" class="spot-chart"></div>
+  </div>
+  <div class="stb"><span id="stmsg">Ready</span><span>v7.0</span></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="mbd" id="zmod" onclick="bdClick(event)">
+  <div class="mdl">
+    <div class="mhd">
+      <h3>⟳ Zemax OpticStudio — Prescription export</h3>
+      <button class="xcls" onclick="closeZ()">✕</button>
+    </div>
+    <div class="si" id="zsi"></div>
+    <div class="tbar">
+      <button class="tb act" onclick="swTab('lde',this)">LDE</button>
+      <button class="tb" onclick="swTab('stp',this)">Step‑by‑step</button>
+      <button class="tb" onclick="swTab('pit',this)">⚠ Pitfalls</button>
+    </div>
+    <div class="tc">
+      <div class="tp act" id="tp-lde">
+        <div class="lde" id="lde-t"></div>
+        <div class="cbr"><button class="cpb" onclick="cpy('lde-t',this)">Copy LDE</button></div>
+      </div>
+      <div class="tp" id="tp-stp"><div class="stps" id="stp-t"></div></div>
+      <div class="tp" id="tp-pit"><div class="stps" id="pit-t"></div></div>
+    </div>
+  </div>
 </div>
 
 <script>
-/**
- * ============================================================
- * CASSEGRAIN + TOROIDAL M3 — v3.5  (2026-02-18)
- * ============================================================
- * v3.5 additions:
- *  [26] Zemax Export button (purple, right of Run Solver).
- *       Disabled until first solve completes.
- *  [27] Zemax modal with three tabs:
- *       Tab 1 — LDE Prescription: formatted fixed-width table
- *         with all 8 surfaces, colour-coded by type, plus
- *         Extra Data block for M3 toroidal parameters.
- *       Tab 2 — Step-by-Step Guide: 7 numbered steps with
- *         exact live values from the last solve.
- *       Tab 3 — Pitfalls: 5 critical warnings for correct
- *         Coordinate Break / toroidal radius sign setup.
- *  [28] generateZemaxReport(sol): builds all modal content
- *       from live solver output — updates on every solve.
- *  [29] copySection(): clipboard copy with visual feedback.
- *  [30] Keyboard Escape closes modal.
- * ============================================================
- */
+'use strict';
 
-const isMobile=()=>window.innerWidth<=640;
-let _lastSol=null;  // stores last solve result for Zemax export [28]
-
-// ── Sidebar toggle ────────────────────────────────────────────
-function toggleSidebar(){
-    const sb=document.getElementById('sidebar'),btn=document.getElementById('sidebarToggle');
-    const open=sb.classList.toggle('open');
-    btn.classList.toggle('open',open);btn.setAttribute('aria-expanded',open);
-    setTimeout(()=>{Plotly.Plots.resize('plotDiv');Plotly.Plots.resize('spotDiv');},370);
-}
-
-// ── Modal ─────────────────────────────────────────────────────
-function openZemax(){
-    if(!_lastSol)return;
-    generateZemaxReport(_lastSol);
-    document.getElementById('zemaxModal').classList.add('open');
-    document.body.style.overflow='hidden';
-}
-function closeZemax(){
-    document.getElementById('zemaxModal').classList.remove('open');
-    document.body.style.overflow='';
-}
-function handleBackdropClick(e){if(e.target===e.currentTarget)closeZemax();}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeZemax();});
-
-function switchTab(name,btn){
-    document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-    document.getElementById('tab-'+name).classList.add('active');
-    btn.classList.add('active');
-}
-
-// [29] Copy to clipboard
-function copySection(id,btn){
-    const el=document.getElementById(id);
-    const text=el.innerText||el.textContent;
-    navigator.clipboard.writeText(text).then(()=>{
-        btn.textContent='✓ Copied!';btn.classList.add('copied');
-        setTimeout(()=>{btn.textContent=id==='lde-text'?'Copy LDE':'Copy Steps';
-                        btn.classList.remove('copied');},2000);
-    }).catch(()=>{
-        const ta=document.createElement('textarea');
-        ta.value=text;document.body.appendChild(ta);ta.select();
-        document.execCommand('copy');document.body.removeChild(ta);
-        btn.textContent='✓ Copied!';btn.classList.add('copied');
-        setTimeout(()=>{btn.textContent=id==='lde-text'?'Copy LDE':'Copy Steps';
-                        btn.classList.remove('copied');},2000);
+/* ========= RESIZER LOGIC ========= */
+var isDraggingH = false, isDraggingV = false;
+document.getElementById('resizerH').addEventListener('mousedown', function(e) {
+  isDraggingH = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+document.getElementById('resizerV').addEventListener('mousedown', function(e) {
+  isDraggingV = true;
+  document.body.style.cursor = 'ns-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', function(e) {
+  if (isDraggingH) {
+    var nw = e.clientX;
+    if (nw < 280) nw = 280;
+    if (nw > 800) nw = 800;
+    document.getElementById('sb').style.width = nw + 'px';
+  }
+  if (isDraggingV) {
+    var stbH = document.querySelector('.stb').offsetHeight;
+    var nh = window.innerHeight - e.clientY - stbH;
+    if (nh < 150) nh = 150;
+    if (nh > window.innerHeight - 200) nh = window.innerHeight - 200;
+    document.getElementById('srow').style.height = nh + 'px';
+  }
+});
+window.addEventListener('mouseup', function(e) {
+  if (isDraggingH || isDraggingV) {
+    isDraggingH = false;
+    isDraggingV = false;
+    document.body.style.cursor = 'default';
+    ['plotDiv','s0','s1','s2','s3'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el && el.data) Plotly.Plots.resize(el);
     });
-}
-
-// ── [28] Generate Zemax report from live solver results ───────
-function generateZemaxReport(s){
-    const D1=s.D1, R1=parseFloat(document.getElementById('m1_roc').value);
-    const K1=parseFloat(document.getElementById('m1_k').value);
-    const R2=parseFloat(document.getElementById('m2_roc').value);
-    const K2=parseFloat(document.getElementById('m2_k').value);
-    const d1=parseFloat(document.getElementById('d1').value);
-    const d_m3=parseFloat(document.getElementById('m3_back').value);
-    const bfl=s.target_bfl;
-    const Rt=s.Rt, Rs=s.Rs;
-    const m2d=s.fp.m2_dia, m3sx=s.fp.m3_semi_x, m3sy=s.fp.m3_semi_y;
-    const sf=s.starting_f, ff=s.final_f;
-    const EFL=(ff*D1/1000).toFixed(3);
-
-    // Thickness calculations
-    const t_m1_to_m2=-d1;           // beam goes -Z to M2
-    const t_m2_to_m3=d_m3+d1;      // beam returns +Z through M1 hole to M3
-    const t_cb_to_img=-bfl;         // in folded local frame, -Y
-
-    // ── System info chips ──────────────────────────────────────
-    document.getElementById('modal-sysinfo').innerHTML=`
-        <div class="sysinfo-chip">D₁ = <span>${D1} mm</span></div>
-        <div class="sysinfo-chip">Native <span>f/${sf.toFixed(2)}</span></div>
-        <div class="sysinfo-chip">Effective <span>f/${ff.toFixed(2)}</span></div>
-        <div class="sysinfo-chip">EFL = <span>${EFL} m</span></div>
-        <div class="sysinfo-chip">BFL = <span>${bfl} mm</span></div>
-        <div class="sysinfo-chip">M2 ⌀ = <span>${m2d.toFixed(1)} mm</span></div>
-        <div class="sysinfo-chip">M3 = <span>${(2*m3sx).toFixed(2)}×${(2*m3sy).toFixed(2)} mm</span></div>`;
-
-    // ── LDE table ─────────────────────────────────────────────
-    const w=[5,14,11,12,10,10,9];  // column widths
-    const head=['Surf','Type','Radius','Thickness','Material','Semi-Dia','Conic'];
-    const sep='─'.repeat(w.reduce((a,b)=>a+b,0)+w.length*2+2);
-    const row=(cells,cls='')=>cells.map((c,i)=>String(c).padStart(i===1?-w[i]:w[i]).padEnd(i===1?w[i]:w[i])).join('  ');
-
-    // Build plain text (HTML spans added below)
-    const lde_rows=[
-        ['OBJ', 'Standard',    'Infinity',           'Infinity',  '',       '',                '',       'Object'],
-        ['1',   'Standard',    R1.toFixed(3),        t_m1_to_m2,  'MIRROR', (D1/2).toFixed(1), K1,       'M1 parabola — conic '+K1],
-        ['2',   'Standard',    R2.toFixed(3),        t_m2_to_m3,  'MIRROR', (m2d/2).toFixed(2),'K2',     'M2 hyperbola — conic '+K2],
-        ['3',   'Coord Break', '—',                  '0',         '',       '—',               '—',      'Tilt X = −45°'],
-        ['4',   'Toroidal',    Rt.toFixed(4),        '0',         'MIRROR', m3sy.toFixed(3),   '0',      'M3 — Rt (meridional); Par 1 = Rs'],
-        ['5',   'Coord Break', '—',                  '0',         '',       '—',               '—',      'Pickup CB surf 3, scale +1'],
-        ['6',   'Standard',    'Infinity',           t_cb_to_img, '',       '',                '',       'Propagate to focus (local −Z)'],
-        ['IMA', 'Standard',    'Infinity',           '—',         '',       '',                '',       'Focal plane'],
-    ];
-
-    // Column widths adjusted for readability
-    function pad(s,n,right=false){s=String(s);return right?s.padEnd(n):s.padStart(n);}
-    function fmtRow(r){
-        return [pad(r[0],4),pad(r[1],14,true),pad(r[2],12),pad(r[3],12),
-                pad(r[4],8,true),pad(r[5],9),pad(r[6],9)].join(' ');
-    }
-    const hdr=fmtRow(['Surf','Type','Radius','Thickness','Matl','Semi-Dia','Conic']);
-    const sp2='─'.repeat(hdr.length);
-    let ldeHtml=`<span class="lde-head">${hdr}\n${sp2}\n</span>`;
-
-    lde_rows.forEach((r,i)=>{
-        const line=fmtRow(r)+'  ;  '+r[7];
-        let cls='';
-        if(i===0||i===6||i===7) cls='lde-img';
-        else if(i===1||i===2) cls='lde-mirror';
-        else if(i===3||i===5) cls='lde-cb';
-        else if(i===4) cls='lde-toroid';
-        ldeHtml+=`<span class="${cls}">${line}\n</span>`;
+  }
+});
+window.addEventListener('resize', function(){
+    ['plotDiv','s0','s1','s2','s3'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el && el.data) Plotly.Plots.resize(el);
     });
+});
 
-    ldeHtml+=`\n<span class="lde-head">─── Extra Data Editor (Surface 4 — Toroidal) ───</span>\n`;
-    ldeHtml+=`<span class="lde-toroid">  Par 1  (Radius of Rotation = Rs)  ${Rs.toFixed(4)} mm\n`;
-    ldeHtml+=`  Par 2  (Extra Conic — sagittal)    0\n`;
-    ldeHtml+=`\n</span>`;
-    ldeHtml+=`<span class="lde-head">─── Aperture Data ───</span>\n`;
-    ldeHtml+=`<span class="lde-mirror">  Surf 2 (M2) : Circular Aperture,  max radius = ${(m2d/2).toFixed(2)} mm\n`;
-    ldeHtml+=`</span><span class="lde-toroid">  Surf 4 (M3) : Elliptical Aperture, X half = ${m3sx.toFixed(3)} mm (sag)\n`;
-    ldeHtml+=`                               Y half = ${m3sy.toFixed(3)} mm (mer)\n`;
-    ldeHtml+=`</span>`;
-    ldeHtml+=`<span class="lde-head">─── System Settings ───</span>\n`;
-    ldeHtml+=`<span class="lde-img">  Entrance Pupil Diameter : ${D1} mm\n`;
-    ldeHtml+=`  System Aperture Type    : Entrance Pupil Diameter\n`;
-    ldeHtml+=`  Reference Wavelength    : 0.55 μm (default; add F, e, C for achromat)\n`;
-    ldeHtml+=`  Field Type              : Angle (degrees)  →  start with 0,0 (on-axis)\n`;
-    ldeHtml+=`</span>`;
+/* ========= PRESETS ========= */
+var PRESETS = [
+  {m1d:600,m1r:-2447.7,m1k:-1.0, m2r:-272.2,   m2k:-1.4336,d1:1100,m3b:100,bfl:50, det:20,lnm:550},
+  {m1d:600,m1r:-2447.7,m1k:-1.0, m2r:-1090.499,m2k:-3.674, d1:850, m3b:300,bfl:690,det:10,lnm:630}
+];
 
-    document.getElementById('lde-text').innerHTML=ldeHtml;
+function loadPreset(idx){
+  for(var i=0;i<3;i++) document.getElementById('pre'+i).classList.toggle('active',i===idx);
+  if(idx>=PRESETS.length) return;
+  var p=PRESETS[idx];
+  sv('m1d',p.m1d);sv('m1r',p.m1r);sv('m1k',p.m1k);
+  sv('m2r',p.m2r);sv('m2k',p.m2k);sv('d1',p.d1);
+  sv('m3b',p.m3b);sv('bfl',p.bfl);sv('det',p.det);sv('lnm',p.lnm);
+  
+  document.getElementById('len').checked = false;
+  toggleLens();
+  
+  toast('Preset '+(idx+1)+' loaded');
+}
+function sv(id,v){document.getElementById(id).value=v;}
+function gv(id){return parseFloat(document.getElementById(id).value);}
 
-    // ── Step-by-step guide ─────────────────────────────────────
-    const steps=[
-        {
-            title:'System aperture and units',
-            body:`Open <em>System Explorer → Aperture</em>. Set:`,
-            params:[
-                ['Aperture Type','Entrance Pupil Diameter'],
-                ['Aperture Value',D1+' mm'],
-                ['Lens Units','Millimetres'],
-                ['Temperature','20 °C  (affects substrate thickness if used)'],
-            ]
-        },
-        {
-            title:'Enter M1 — parabolic primary mirror',
-            body:`In the LDE, Surface 1 (after OBJ): set type <strong>Standard</strong>, material <strong>MIRROR</strong>.`,
-            params:[
-                ['Radius',R1.toFixed(3)+' mm'],
-                ['Thickness',t_m1_to_m2+' mm  (negative: beam travels −Z toward M2)'],
-                ['Conic',K1],
-                ['Semi-Diameter',(D1/2)+' mm'],
-            ]
-        },
-        {
-            title:'Enter M2 — hyperbolic secondary mirror',
-            body:`Surface 2: type <strong>Standard</strong>, material <strong>MIRROR</strong>.`,
-            params:[
-                ['Radius',R2.toFixed(3)+' mm'],
-                ['Thickness',t_m2_to_m3+' mm  (beam returns +Z through M1 hole to M3)'],
-                ['Conic',K2],
-                ['Semi-Diameter',(m2d/2).toFixed(2)+' mm  (footprint radius)'],
-                ['Aperture Type','Circular  — max radius = '+(m2d/2).toFixed(2)+' mm'],
-            ]
-        },
-        {
-            title:'Insert M3 fold via Add Fold Mirror tool',
-            body:`Right-click Surface 2 in the LDE → <strong>Insert Surface After</strong>. Add three surfaces (CB + mirror + CB). Alternatively use <em>Lens Menu → Add Fold Mirror</em> which auto-inserts the CB sandwich. Then:`,
-            params:[
-                ['CB1 Tilt About X','−45°'],
-                ['CB1 Thickness','0  (vertex at current position)'],
-                ['Mirror surface','type → Toroidal  (next step)'],
-                ['CB2 Tilt About X','Pickup from CB1, scale = +1'],
-                ['CB2 Thickness','0'],
-            ],
-            warn:'Both Coordinate Breaks use scale = +1. Using −1 causes a tilted image plane.'
-        },
-        {
-            title:'Configure M3 as a Toroidal mirror',
-            body:`Click the type cell of the mirror surface → select <strong>Toroidal</strong>. Set:`,
-            params:[
-                ['Radius  (meridional, Rt)',Rt.toFixed(4)+' mm'],
-                ['Conic (meridional)','0  (spherical base curve)'],
-                ['Material','MIRROR'],
-                ['Semi-Diameter Y  (mer)',m3sy.toFixed(3)+' mm  (footprint semi-axis)'],
-                ['Semi-Diameter X  (sag)','set via Elliptical Aperture below'],
-            ]
-        },
-        {
-            title:'Enter Rs in Extra Data Editor',
-            body:`With surface 4 selected, open <em>Editors → Extra Data Editor</em>:`,
-            params:[
-                ['Par 1  (Radius of Rotation = Rs)',Rs.toFixed(4)+' mm'],
-                ['Par 2  (sagittal conic)','0'],
-            ],
-            warn:'Par 1 sign must match the meridional radius sign. Both should be negative for this concave toroid (Rt/Rs = '+(Rt/Rs).toFixed(3)+').'
-        },
-        {
-            title:'Set apertures and propagate to focal plane',
-            body:`On Surface 4 (M3) → <em>Surface Properties → Aperture</em>:`,
-            params:[
-                ['Aperture Type','Elliptical Aperture'],
-                ['X Half-Width (sagittal)',m3sx.toFixed(3)+' mm'],
-                ['Y Half-Width (meridional)',m3sy.toFixed(3)+' mm'],
-            ]
-        },
-        {
-            title:'Set image plane and verify',
-            body:`Surface after CB2: set thickness = <strong>${t_cb_to_img} mm</strong> (negative, in folded local frame). Then run:`,
-            params:[
-                ['3D Layout','Confirm 90° fold and focus at y = −'+bfl+' mm (global)'],
-                ['Spot Diagram','Expected RMS ≈ '+s.stE.rms.toFixed(1)+' μm  (effective f/'+ff.toFixed(2)+')'],
-                ['Ray Fan','Tangential and sagittal fans should show separate astigmatic foci'],
-                ['Prescription Report','Verify Par 1 = '+Rs.toFixed(4)+' on Toroidal surface'],
-            ]
-        },
-    ];
+var _tt=null;
+function toast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('on');
+  clearTimeout(_tt);_tt=setTimeout(function(){t.classList.remove('on');},2800);
+}
+function toggleLens(){document.getElementById('lpan').style.display=document.getElementById('len').checked?'block':'none';}
 
-    let stepsHtml='';
-    steps.forEach((st,i)=>{
-        stepsHtml+=`<div class="step">
-            <div><span class="step-num">${i+1}</span><span class="step-title">${st.title}</span></div>
-            <div class="step-body">
-                <p style="margin:4px 0 6px;">${st.body}</p>
-                <div class="param-box">`;
-        st.params.forEach(([k,v])=>{
-            stepsHtml+=`<div><span class="param-key">${k.padEnd(38,' ')}</span><span class="param-val">${v}</span></div>`;
-        });
-        stepsHtml+='</div>';
-        if(st.warn) stepsHtml+=`<div class="warn-box">⚠ ${st.warn}</div>`;
-        stepsHtml+='</div></div>';
+/* ========= Glass database (built‑in + AGF) ========= */
+var BUILTIN={
+  'N-BK7'  :{nd:1.5168,Vd:64.17,f:1,c:[1.03961212,0.00600069867,0.231792344,0.0200179144,1.01046945,103.560653],cat:'SCHOTT'},
+  'N-F2'   :{nd:1.6200,Vd:36.43,f:1,c:[1.34533359,0.00997743871,0.209073176,0.0470450767,0.937357162,111.886764],cat:'SCHOTT'},
+  'N-SF11' :{nd:1.7847,Vd:25.68,f:1,c:[1.73759695,0.013188707,0.313747346,0.0623068142,1.89878101,155.23629],cat:'SCHOTT'},
+  'N-LAK22':{nd:1.6511,Vd:56.13,f:1,c:[1.14229781,0.00585778594,0.535138441,0.0198546147,1.04088385,100.834017],cat:'SCHOTT'},
+  'N-BAK1' :{nd:1.5725,Vd:57.55,f:1,c:[1.12365662,0.00644742752,0.309276489,0.0222284402,0.881511957,107.297751],cat:'SCHOTT'},
+  'SILICA' :{nd:1.4585,Vd:67.82,f:1,c:[0.6961663,0.004679148,0.4079426,0.013512063,0.8974794,97.934],cat:'FUSED'},
+  'N-FK5'  :{nd:1.4875,Vd:70.41,f:1,c:[0.844309338,0.00473674828,0.344147824,0.0149986143,0.910790213,97.9343832],cat:'SCHOTT'},
+  'N-SSK5' :{nd:1.6580,Vd:50.90,f:1,c:[1.59222659,0.00920284626,0.103520774,0.0423530072,1.05174016,128.748753],cat:'SCHOTT'}
+};
+var MATDB={};      
+var SELMAT='N-BK7';
+
+function getDB(){
+  var all=Object.assign({},BUILTIN,MATDB);
+  return all;
+}
+function sellmeier(lum,c){
+  var l2=lum*lum;
+  return Math.sqrt(1+c[0]*l2/(l2-c[1])+c[2]*l2/(l2-c[3])+c[4]*l2/(l2-c[5]));
+}
+function getN(name,lnm){
+  var db=getDB(),m=db[name];
+  if(!m)return 1.5168;
+  if(m.f===1 && m.c && m.c.length>=6) return sellmeier(lnm/1000,m.c);
+  return m.nd||1.5;
+}
+
+/* AGF parsing */
+function loadAGF(inp){
+  var files=Array.from(inp.files);if(!files.length)return;
+  var done=0;
+  files.forEach(function(f){
+    var r=new FileReader();
+    r.onload=function(e){
+      parseAGF(e.target.result,f.name);done++;
+      if(done===files.length){
+        rebuildSel('');
+        updateChips();
+        document.getElementById('agfst').textContent=Object.keys(MATDB).length+
+          ' glasses from '+files.length+' file(s), + built‑ins';
+        toast('AGF loaded: '+Object.keys(MATDB).length+' glasses');
+        autoPickGlass();updateInfo();
+      }
+    };
+    r.readAsText(f);
+  });
+}
+function parseAGF(txt,fname){
+  var cat=fname.replace(/\.agf$/i,'').toUpperCase();
+  var lines=txt.split(/\r?\n/);
+  for(var i=0;i<lines.length;i++){
+    var l=lines[i].trim();if(!l.startsWith('NM '))continue;
+    var p=l.split(/\s+/);
+    var name=p[1]||'',formula=parseInt(p[2])||1;
+    var nd=parseFloat(p[4])||1.5,Vd=parseFloat(p[5])||50,coeffs=[];
+    for(var j=i+1;j<Math.min(i+10,lines.length);j++){
+      var cl=lines[j].trim();
+      if(cl.startsWith('CD ')){
+        coeffs=cl.split(/\s+/).slice(1).map(Number).filter(function(v){return!isNaN(v);});
+        break;
+      }
+      if(cl.startsWith('NM '))break;
+    }
+    if(name)MATDB[name]={nd:nd,Vd:Vd,f:formula,c:coeffs,cat:cat};
+  }
+}
+function updateChips(){
+  var cats={};
+  Object.values(MATDB).forEach(function(m){cats[m.cat]=(cats[m.cat]||0)+1;});
+  document.getElementById('chips').innerHTML=Object.entries(cats).map(function(e){
+    return '<span class="chip">'+e[0]+' ('+e[1]+')</span>';
+  }).join('');
+}
+function rebuildSel(flt){
+  var db=getDB(),fl=flt.toLowerCase();
+  var opts=Object.entries(db).filter(function(e){
+    return fl==='' || e[0].toLowerCase().indexOf(fl)>=0;
+  }).sort(function(a,b){return a[0].localeCompare(b[0]);});
+  var html=opts.map(function(e){
+    var n=e[0],m=e[1];
+    return '<option value="'+n+'"'+(n===SELMAT?' selected':'')+'>'+
+           n+'  nd='+m.nd.toFixed(4)+'  V='+m.Vd.toFixed(1)+'</option>';
+  }).join('');
+  document.getElementById('msel').innerHTML=html;
+}
+function fltMat(){rebuildSel(document.getElementById('mflt').value);}
+function clrFlt(){document.getElementById('mflt').value='';rebuildSel('');}
+function pickMat(){
+  var v=document.getElementById('msel').value;
+  if(v){SELMAT=v;updateInfo();document.getElementById('autoGlass').checked=false;}
+}
+function updateInfo(){
+  var db=getDB(),m=db[SELMAT];
+  document.getElementById('minf').textContent=m?
+    (SELMAT+' — nd='+m.nd.toFixed(4)+'  Vd='+m.Vd.toFixed(2)+'  ['+(m.cat||'BUILT-IN')+']'):
+    SELMAT;
+}
+function autoPickGlass(){
+  if(!document.getElementById('autoGlass').checked)return;
+  var lnm=gv('lnm')||550;
+  var targetNd=1.5168; 
+  var best=null,bErr=1e9;
+  var db=getDB();
+  Object.entries(db).forEach(function(e){
+    var n=e[0],m=e[1];
+    var nd=m.nd||1.5;
+    var err=Math.abs(nd-targetNd);
+    if(err<bErr){bErr=err;best=n;}
+  });
+  if(best){SELMAT=best;rebuildSel('');updateInfo();}
+}
+function updateGlassMode(){
+  if(document.getElementById('autoGlass').checked){autoPickGlass();}
+}
+
+window.addEventListener('DOMContentLoaded',function(){
+  rebuildSel('');autoPickGlass();updateInfo();
+});
+
+/* ========= Vector math ========= */
+function vadd(a,b){return[a[0]+b[0],a[1]+b[1],a[2]+b[2]];}
+function vsub(a,b){return[a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+function vmul(a,s){return[a[0]*s,a[1]*s,a[2]*s];}
+function vdot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+function vmag(a){return Math.sqrt(a[0]*a[0]+a[1]*a[1]+a[2]*a[2]);}
+function vnrm(a){var m=vmag(a);return m<1e-15?[0,0,0]:vmul(a,1/m);}
+function rat(p,k,t){return vadd(p,vmul(k,t));}
+function mkRay(o,d){return{p:o,k:vnrm(d)};}
+
+/* ========= Conic mirrors (ULTRA STRICT ROOT SELECTION) ========= */
+function hitConic(s,ray,noAp){
+  var p=vsub(ray.p,[0,0,s.z0]),k=ray.k,K=s.K,c=s.c;
+  var F=(1+K)*c;
+  var A=c*(k[0]*k[0]+k[1]*k[1])+F*k[2]*k[2];
+  var B=2*c*(p[0]*k[0]+p[1]*k[1])+2*F*p[2]*k[2]-2*k[2];
+  var C=c*(p[0]*p[0]+p[1]*p[1])+F*p[2]*p[2]-2*p[2];
+  var t = null;
+  
+  if(Math.abs(A)<1e-10){
+    if(Math.abs(B)<1e-10)return null;
+    t=-C/B;
+    if (t < 1e-5) return null;
+  }
+  else{
+    var disc=B*B-4*A*C;if(disc<0)return null;
+    var sq=Math.sqrt(disc);
+    var t1=(-B-sq)/(2*A), t2=(-B+sq)/(2*A);
+    var cands=[t1,t2].filter(function(v){return v>1e-5;});
+    cands.sort(function(a,b){return a-b;});
+    
+    for(var i=0; i<cands.length; i++){
+        var th = rat(ray.p, ray.k, cands[i]);
+        var thl = vsub(th, [0,0,s.z0]);
+        if (c === 0 || c * thl[2] >= -1e-4) {
+            t = cands[i];
+            break;
+        }
+    }
+  }
+  if (t === null) return null;
+  
+  var h=rat(ray.p,ray.k,t),hl=vsub(h,[0,0,s.z0]);
+  if(!noAp && hl[0]*hl[0]+hl[1]*hl[1]>(s.ap/2)*(s.ap/2))return null;
+  var nm=vnrm([-c*hl[0],-c*hl[1],1-(K+1)*c*hl[2]]);
+  var d2=vdot(ray.k,nm);
+  return{pt:h,dir:vsub(ray.k,vmul(nm,2*d2))};
+}
+
+/* ========= Toroidal M3 (tilt +45°, +Z→−Y) ========= */
+var INV_SQRT2=1/Math.sqrt(2);
+function torGlbToLoc(zm3,p){
+  var dz=p[2]-zm3,y=p[1];
+  return[p[0],(y-dz)*INV_SQRT2,(y+dz)*INV_SQRT2];
+}
+function torLocToGlbVec(v){
+  return[v[0],(v[1]+v[2])*INV_SQRT2,(-v[1]+v[2])*INV_SQRT2];
+}
+function torSag(x,y,Cx,Cy){
+  var dx=1-Cx*Cx*x*x,dy=1-Cy*Cy*y*y;
+  return (Cx*x*x)/(1+Math.sqrt(Math.max(dx,0))) + (Cy*y*y)/(1+Math.sqrt(Math.max(dy,0)));
+}
+function hitToroid(tor,ray){
+  var zm3=tor.z0,Cx=tor.Cx,Cy=tor.Cy;
+  var nplane=[0,INV_SQRT2,INV_SQRT2];
+  var dn=vdot(ray.k,nplane);if(Math.abs(dn)<1e-8)return null;
+  
+  var tc=vdot(vsub([0,0,zm3],ray.p),nplane)/dn;
+  if(tc < 1e-4) return null; 
+
+  var dlz=(ray.k[1]+ray.k[2])*INV_SQRT2;if(Math.abs(dlz)<1e-12)return null;
+  
+  for(var i=0;i<40;i++){
+    var h=rat(ray.p,ray.k,tc),loc=torGlbToLoc(zm3,h),zs=torSag(loc[0],loc[1],Cx,Cy);
+    var res=loc[2]-zs;if(Math.abs(res)<1e-10)break;
+    tc-=res/dlz;
+  }
+  
+  if(tc < 1e-4 || tc > 3000) return null; 
+
+  var h2=rat(ray.p,ray.k,tc),loc2=torGlbToLoc(zm3,h2);
+  var r2x=loc2[0]*loc2[0],r2y=loc2[1]*loc2[1];
+  var dxv=Math.max(1-Cx*Cx*r2x, 0);
+  var dyv=Math.max(1-Cy*Cy*r2y, 0);
+  var dsdx=Cx*loc2[0]/Math.sqrt(Math.max(dxv,1e-15));
+  var dsdy=Cy*loc2[1]/Math.sqrt(Math.max(dyv,1e-15));
+  var nl=vnrm([-dsdx,-dsdy,1]);
+  var ng=vnrm(torLocToGlbVec(nl));
+  if(vdot(ray.k,ng)>0)ng=vmul(ng,-1);
+  var d2=vdot(ray.k,ng);
+  return{pt:h2,dir:vsub(ray.k,vmul(ng,2*d2))};
+}
+
+/* ========= Lens surfaces (after M3, beam −Y) ========= */
+function mkLS(y0,R,ap,cx,cz){
+  return{y0:y0,c:Math.abs(R)>0.5?1/R:0,ap2:(ap/2)*(ap/2),cx:cx||0,cz:cz||0};
+}
+function hitLens(ls,ray,n1,n2){
+  if(Math.abs(ray.k[1])<1e-10)return null;
+  var t=(ls.y0-ray.p[1])/ray.k[1];
+  for(var i=0;i<25;i++){
+    var h=rat(ray.p,ray.k,t),dx=h[0]-ls.cx,dz=h[2]-ls.cz,r2=dx*dx+dz*dz;
+    var disc=1-ls.c*ls.c*r2;if(disc<0)return null;
+    var sg=ls.c*r2/(1+Math.sqrt(disc));
+    var dy=h[1]-(ls.y0+sg);
+    if(Math.abs(dy)<1e-9)break;
+    t-=dy/ray.k[1];
+  }
+  var h2=rat(ray.p,ray.k,t),dxh=h2[0]-ls.cx,dzh=h2[2]-ls.cz,r2h=dxh*dxh+dzh*dzh;
+  if(r2h>ls.ap2)return null;
+  var disc2=1-ls.c*ls.c*r2h;if(disc2<=0)return null;
+  var dsdx=-ls.c*dxh/Math.sqrt(disc2),dsdz=-ls.c*dzh/Math.sqrt(disc2);
+  var nm=vnrm([-dsdx,1,-dsdz]);
+  if(vdot(ray.k,nm)>0)nm=vmul(nm,-1);
+  var nr=n1/n2,cosI=-vdot(ray.k,nm);
+  var cos2T=1-nr*nr*(1-cosI*cosI);if(cos2T<0)return null;
+  return{pt:h2,dir:vnrm(vadd(vmul(ray.k,nr),vmul(nm,nr*cosI-Math.sqrt(cos2T))))};
+}
+
+/* ========= Pupil sampling ========= */
+function pupil(N){
+  var pts=[{px:0,py:0,rho:0}];
+  for(var r=1;r<=N;r++){
+    var n=6*r;
+    for(var i=0;i<n;i++){
+      var a=2*Math.PI*i/n,rho=r/N;
+      pts.push({px:rho*Math.cos(a),py:rho*Math.sin(a),rho:rho});
+    }
+  }
+  return pts;
+}
+
+/* ========= Native focus and M2 footprint ========= */
+function natFocus(m1,D1,R2,K2,d1, startZ){
+  var m2b={z0:-d1,K:K2,c:1/R2,ap:D1*4};
+  var h1=hitConic(m1,mkRay([0,D1/2,startZ],[0,0,1]),false);
+  if(!h1)return null;
+  var h2=hitConic(m2b,mkRay(h1.pt,h1.dir),false);
+  if(!h2 || Math.abs(h2.dir[1])<1e-12)return null;
+  var t=-h2.pt[1]/h2.dir[1];
+  var znf=h2.pt[2]+t*h2.dir[2];
+  var slope=Math.abs(h2.dir[1]/h2.dir[2]);
+  return{znf:znf,slope:slope};
+}
+
+function m2Footprint(m1,D1,R2,K2,d1, startZ){
+  var m2b={z0:-d1,K:K2,c:1/R2,ap:D1*4};
+  var pts=pupil(16),maxR=0;
+  for(var i=0;i<pts.length;i++){
+    var p=pts[i];
+    var h1=hitConic(m1,mkRay([p.px*D1/2,p.py*D1/2,startZ],[0,0,1]),false);
+    if(!h1)continue;
+    var h2=hitConic(m2b,mkRay(h1.pt,h1.dir),false);
+    if(!h2)continue;
+    var r=Math.sqrt(h2.pt[0]*h2.pt[0]+h2.pt[1]*h2.pt[1]);
+    if(r>maxR)maxR=r;
+  }
+  return maxR>0 ? (2*maxR) : D1*0.2; 
+}
+
+/* ========= Toroid solver (Transverse Newton Method) ========= */
+function solveTor(D1,R1,K1,R2,K2,d1,zm3,bfl){
+  var startZ = Math.min(-d1 - 100, -1200);
+  var TY=-bfl;
+  var m1={z0:0,K:K1,c:1/R1,ap:D1};
+  var nf=natFocus(m1,D1,R2,K2,d1, startZ);if(!nf)return null;
+  var znf=nf.znf;
+  
+  var sod=znf-zm3, P=1/bfl-1/sod;
+  var Cb = P/2;
+  var Ct = Cb * Math.SQRT2, Cs = Cb * INV_SQRT2;
+  
+  var m2d_init=m2Footprint(m1,D1,R2,K2,d1, startZ);
+  var m2={z0:-d1,K:K2,c:1/R2,ap:m2d_init};
+  var m2big={z0:-d1,K:K2,c:1/R2,ap:D1*4};
+  
+  function mkTor(cT, cS){
+    return {
+      z0: zm3,
+      Rt: Math.abs(cT)>1e-8 ? 1/cT : 1e9,
+      Rs: Math.abs(cS)>1e-8 ? 1/cS : 1e9,
+      Cx: cS, // Sagittal 
+      Cy: cT  // Tangential 
+    };
+  }
+  
+  function err(cT, cS){
+    var tor=mkTor(cT, cS);
+    function traceTarget(px, py){
+      var h1=hitConic(m1,mkRay([px,py,startZ],[0,0,1]),false);if(!h1)return null;
+      var h2=hitConic(m2big,mkRay(h1.pt,h1.dir),false);if(!h2)return null;
+      var h3=hitToroid(tor,mkRay(h2.pt,h2.dir));if(!h3)return null;
+      if(Math.abs(h3.dir[1])<1e-10) return null;
+      var t = (TY - h3.pt[1]) / h3.dir[1];
+      return vadd(h3.pt, vmul(h3.dir, t));
+    }
+    
+    var ptT = traceTarget(0, D1/2); 
+    var ptS = traceTarget(D1/2, 0); 
+    if(!ptT || !ptS) return null;
+    
+    return { eM: ptT[2] - zm3, eS: ptS[0] };
+  }
+  
+  var step=1e-6, damp=0.8;
+  for(var it=0;it<150;it++){
+    var r0=err(Ct,Cs);if(!r0)break;
+    if(Math.abs(r0.eM)<1e-5&&Math.abs(r0.eS)<1e-5)break;
+    var rT2=err(Ct+step,Cs);if(!rT2)break;
+    var rS2=err(Ct,Cs+step);if(!rS2)break;
+    
+    var J00=(rT2.eM-r0.eM)/step, J01=(rS2.eM-r0.eM)/step;
+    var J10=(rT2.eS-r0.eS)/step, J11=(rS2.eS-r0.eS)/step;
+    var det2=J00*J11-J01*J10;
+    
+    if(Math.abs(det2)<1e-20) break;
+    
+    var dCt = ( J11*r0.eM - J01*r0.eS)/det2;
+    var dCs = (-J10*r0.eM + J00*r0.eS)/det2;
+    
+    if(Math.abs(dCt)>0.005) dCt = Math.sign(dCt)*0.005;
+    if(Math.abs(dCs)>0.005) dCs = Math.sign(dCs)*0.005;
+    
+    Ct -= damp*dCt;
+    Cs -= damp*dCs;
+  }
+  
+  var fin=err(Ct,Cs),tor=mkTor(Ct,Cs);
+  var Rt=tor.Rt, Rs=tor.Rs;
+  var sxArr=[],syArr=[],fpPts=pupil(20);
+  
+  var m1_hole_rad = 0;
+  var m2d_final_rad = 0;
+
+  for(var i=0;i<fpPts.length;i++){
+    var p=fpPts[i];
+    var h1=hitConic(m1,mkRay([p.px*D1/2,p.py*D1/2,startZ],[0,0,1]),false);if(!h1)continue;
+    var h2=hitConic(m2big,mkRay(h1.pt,h1.dir),false);if(!h2)continue;
+    var h3=hitToroid(tor,mkRay(h2.pt,h2.dir));if(!h3)continue;
+
+    var r2_curr = Math.sqrt(h2.pt[0]*h2.pt[0] + h2.pt[1]*h2.pt[1]);
+    if(r2_curr > m2d_final_rad) m2d_final_rad = r2_curr;
+
+    var loc=torGlbToLoc(zm3,h3.pt);sxArr.push(loc[0]);syArr.push(loc[1]);
+    
+    if(Math.abs(h2.dir[2]) > 1e-6){
+        var t_z0 = (0 - h2.pt[2]) / h2.dir[2];
+        if(t_z0 > 0) {
+            var p_z0 = rat(h2.pt, h2.dir, t_z0);
+            var r_z0 = Math.sqrt(p_z0[0]*p_z0[0] + p_z0[1]*p_z0[1]);
+            if(r_z0 > m1_hole_rad) m1_hole_rad = r_z0;
+        }
+    }
+  }
+  
+  var m2d = m2d_final_rad * 2; 
+  var m1_hole = m1_hole_rad * 2; 
+
+  var sx=sxArr.length?(Math.max.apply(null,sxArr)-Math.min.apply(null,sxArr))/2:20;
+  var sy=syArr.length?(Math.max.apply(null,syArr)-Math.min.apply(null,syArr))/2:20;
+  var eff_ff=0;
+  var hx1=hitConic(m1,mkRay([0,D1/2,startZ],[0,0,1]),false);
+  if(hx1){
+    var hx2=hitConic(m2big,mkRay(hx1.pt,hx1.dir),false);
+    if(hx2){
+      var hx3=hitToroid(tor,mkRay(hx2.pt,hx2.dir));
+      if(hx3 && Math.abs(hx3.dir[1])>1e-10){
+        var trans=Math.sqrt(hx3.dir[0]*hx3.dir[0]+hx3.dir[2]*hx3.dir[2]);
+        if(trans>1e-10)eff_ff=Math.abs(hx3.dir[1])/(2*trans);
+      }
+    }
+  }
+  var nat_ff=nf.slope>1e-10?1/(2*nf.slope):0;
+  return{Rt:Rt,Rs:Rs,tor:tor,m1:m1,m2:{z0:-d1,K:K2,c:1/R2,ap:m2d},m2big:m2big,m2d:m2d,m1_hole:m1_hole,
+         sx:sx,sy:sy,fin:fin,nat_ff:nat_ff,eff_ff:eff_ff,znf:znf, startZ:startZ};
+}
+
+/* ========= Trace ray -> spot (x,z) ========= */
+function traceRay(sol,pxn,pyn,fdeg,useNative){
+  var D1=sol.D1,fa=fdeg*Math.PI/180;
+  var r0=mkRay([pxn*D1/2,pyn*D1/2,sol.startZ],[0,Math.sin(fa),Math.cos(fa)]);
+  var h1=hitConic(sol.m1,r0,false);if(!h1)return null;
+  
+  var r1radSq = h1.pt[0]*h1.pt[0] + h1.pt[1]*h1.pt[1];
+  if (r1radSq < (sol.m1_hole/2)**2) return null;
+
+  var h2=hitConic(sol.m2,mkRay(h1.pt,h1.dir),false);if(!h2)return null;
+  
+  if(useNative){
+      if(Math.abs(h2.dir[2])<1e-10) return null;
+      var t_nat = (sol.znf - h2.pt[2])/h2.dir[2];
+      var pt_nat = vadd(h2.pt, vmul(h2.dir, t_nat));
+      return {x: pt_nat[0]*1e3, z: pt_nat[1]*1e3};
+  }
+
+  var h3=hitToroid(sol.tor,mkRay(h2.pt,h2.dir));if(!h3)return null;
+  var pt=h3.pt,dir=h3.dir;
+  if(sol.lensOn && sol.ls1 && sol.ls2){
+    var l1=hitLens(sol.ls1,mkRay(pt,dir),1.0,sol.lensNd);if(!l1)return null;
+    var l2=hitLens(sol.ls2,mkRay(l1.pt,l1.dir),sol.lensNd,1.0);if(!l2)return null;
+    pt=l2.pt;dir=l2.dir;
+  }
+  if(Math.abs(dir[1])<1e-10)return null;
+  var ty=(-sol.bfl-pt[1])/dir[1];
+  var fp=vadd(pt,vmul(dir,ty));
+  return{x:fp[0]*1e3,z:fp[2]*1e3};
+}
+
+/* ========= Spot diagram ========= */
+function makeSpot(sol,fdeg,useNative){
+  var pts=pupil(12),out=[];
+  for(var i=0;i<pts.length;i++){
+    var r=traceRay(sol,pts[i].px,pts[i].py,fdeg,useNative);
+    if(r)out.push({x:r.x,z:r.z,rho:pts[i].rho});
+  }
+  if(!out.length)return{pts:[],rms:0,rmax:0,n:0};
+  var cx=0,cz=0;for(var j=0;j<out.length;j++){cx+=out[j].x;cz+=out[j].z;}
+  cx/=out.length;cz/=out.length;
+  var rms2=0,rmax2=0;
+  for(var k=0;k<out.length;k++){
+    out[k].x-=cx;out[k].z-=cz;
+    var r2=out[k].x*out[k].x+out[k].z*out[k].z;
+    rms2+=r2;if(r2>rmax2)rmax2=r2;
+  }
+  return{pts:out,rms:Math.sqrt(rms2/out.length),rmax:Math.sqrt(rmax2),n:out.length};
+}
+
+/* ========= Main RUN ========= */
+var SOL=null;
+
+function RUN(){
+  var st=document.getElementById('stmsg');
+  st.textContent='Solving…';st.style.color='var(--accent)';
+  setTimeout(function(){
+    try{
+      autoPickGlass();
+      var D1=gv('m1d'),R1=gv('m1r'),K1=gv('m1k');
+      var R2=gv('m2r'),K2=gv('m2k'),d1=gv('d1');
+      var zm3=gv('m3b'),bfl=gv('bfl');
+      var det=gv('det'),lnm=gv('lnm');
+      var lensOn=document.getElementById('len').checked;
+      var s=solveTor(D1,R1,K1,R2,K2,d1,zm3,bfl);
+      if(!s || !s.fin){st.textContent='Solver failed — check geometry';st.style.color='var(--err)';return;}
+      var eff_ff=s.eff_ff,nat_ff=s.nat_ff;
+      var EFL_eff=eff_ff>0?eff_ff*D1:0;
+      var ps=EFL_eff>0?206265/EFL_eff:0;
+      var halfFov=EFL_eff>0?Math.atan(det/(2*EFL_eff))*180/Math.PI:0;
+      var airR=1.22*(lnm*1e-6)*eff_ff*1e6;
+      var nd=getN(SELMAT,lnm);
+      var lpos=gv('lpos');
+      var Petz=2/R1+2/R2;
+      
+      var f_corr=Math.abs(Petz)>1e-12 ? -1/(nd * Petz) : 1e9;
+      var lr2v=gv('lr2');
+      var invR1=(1/f_corr)/(nd-1) + (Math.abs(lr2v)>0.5?1/lr2v:0);
+      var R1_lens=Math.abs(invR1)>1e-9 ? 1/invR1 : 1e9;
+      
+      var beam_r=s.sy*lpos/bfl;
+      var lens_dia=Math.max(beam_r*2*1.3,6);
+      var CT=Math.max(lens_dia/12,1.5);
+      if(document.getElementById('lpan').style.display!=='none'){
+        document.getElementById('lr1').value=R1_lens.toFixed(2);
+        document.getElementById('lct').value=CT.toFixed(2);
+      }
+      function sp2(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
+      sp2('cv-petz',Petz.toFixed(5)+' mm⁻¹');
+      sp2('cv-fcorr',f_corr.toFixed(1)+' mm');
+      sp2('cv-bdia',(beam_r*2).toFixed(2)+' mm');
+      sp2('cv-ldia',lens_dia.toFixed(1)+' mm');
+      var ls1=null,ls2=null;
+      if(lensOn){
+        var lr1v=gv('lr1'),lr2v=gv('lr2'),lctv=gv('lct');
+        var y_l1=-(bfl-lpos),y_l2=y_l1-lctv;
+        ls1=mkLS(y_l1,lr1v,lens_dia,0,zm3);
+        ls2=mkLS(y_l2,Math.abs(lr2v)<0.5?1e9:lr2v,lens_dia,0,zm3);
+      }
+      var sol={D1:D1,R1:R1,K1:K1,R2:R2,K2:K2,d1:d1,zm3:zm3,bfl:bfl,det:det,lnm:lnm,
+               lensOn:lensOn,ls1:ls1,ls2:ls2,lensNd:nd,
+               halfFov:halfFov,airR:airR,EFL_eff:EFL_eff,ps:ps,
+               Rt:s.Rt,Rs:s.Rs,tor:s.tor,m1:s.m1,m2:s.m2,m2big:s.m2big,
+               m2d:s.m2d,m1_hole:s.m1_hole,sx:s.sx,sy:s.sy,fin:s.fin,nat_ff:nat_ff,eff_ff:eff_ff,
+               znf:s.znf,Petz:Petz,f_corr:f_corr,R1_lens:R1_lens,
+               beam_r:beam_r,lens_dia:lens_dia,CT:CT,glass:SELMAT,glassNd:nd,startZ:s.startZ};
+               
+      sol.sp0_eff=makeSpot(sol,0,false);
+      sol.sp1_eff=makeSpot(sol,halfFov,false);
+      sol.sp0_nat=makeSpot(sol,0,true);
+      sol.sp1_nat=makeSpot(sol,halfFov,true);
+      
+      SOL=sol;document.getElementById('zb').disabled=false;
+      buildRes(sol);
+      plotLayout(sol);
+      plotSpots(sol);
+      st.textContent='Done — Traced '+(sol.sp0_eff.n*2 + sol.sp0_nat.n*2)+' total rays';
+      st.style.color='#555';
+    }catch(ex){
+      st.textContent='Error: '+ex.message;st.style.color='var(--err)';
+      console.error(ex);
+    }
+  },40);
+}
+
+/* ========= Results panel ========= */
+function buildRes(s){
+  function mr(lbl,val,cls){
+    return'<div class="mr"><span class="ml">'+lbl+'</span>'+
+          '<span class="mv '+(cls||'')+'">'+val+'</span></div>';
+  }
+  var c0=(s.sp0_eff.rms>0&&s.airR>0)?(s.sp0_eff.rms<s.airR?'vg':'vb'):'';
+  var c1=(s.sp1_eff.rms>0&&s.airR>0)?(s.sp1_eff.rms<s.airR?'vg':'vb'):'';
+  var eok=s.fin && Math.abs(s.fin.eM)<0.01 && Math.abs(s.fin.eS)<0.01;
+  var lensBlock='';
+  if(s.lensOn){
+    lensBlock='<div class="srh">Field corrector</div>'+
+      mr('Glass',s.glass+' (nd='+s.glassNd.toFixed(4)+')','vi')+
+      mr('Petzval',s.Petz.toFixed(5)+' mm⁻¹','vw')+
+      mr('f_corr',s.f_corr.toFixed(1)+' mm')+
+      mr('R1_lens',s.R1_lens.toFixed(2)+' mm')+
+      mr('Lens Ø',s.lens_dia.toFixed(1)+' mm');
+  }
+  var natBlock='<div class="srh">Native F/# (M1+M2)</div>'+
+      mr('Native F#','f/'+s.nat_ff.toFixed(3),'vi')+
+      mr('znf (from M1)',s.znf.toFixed(2)+' mm');
+      
+  document.getElementById('res').innerHTML=
+    natBlock+
+    '<div class="srh">Effective (M1+M2+M3)</div>'+
+    mr('Effective F#',s.eff_ff>0?'f/'+s.eff_ff.toFixed(3):'--','vi')+
+    mr('EFL (eff)',s.EFL_eff>0?(s.EFL_eff/1000).toFixed(3)+' m':'--')+
+    mr('Plate scale',s.ps>0?s.ps.toFixed(2)+' ″/mm':'--')+
+    mr('FoV ('+s.det+'mm)',s.ps>0?(s.ps*s.det/60).toFixed(2)+'′':'--','vw')+
+    '<div class="srh">Spot — On-axis (eff F#)</div>'+
+    mr('RMS / max',s.sp0_eff.rms.toFixed(2)+' / '+s.sp0_eff.rmax.toFixed(2)+' µm',c0)+
+    mr('Airy r ('+Math.round(s.lnm)+'nm)',s.airR.toFixed(2)+' µm')+
+    mr('Rays traced',s.sp0_eff.n)+
+    '<div class="srh">Spot — Edge FoV '+s.halfFov.toFixed(4)+'° (eff F#)</div>'+
+    mr('RMS / max',s.sp1_eff.rms.toFixed(2)+' / '+s.sp1_eff.rmax.toFixed(2)+' µm',c1)+
+    mr('Rays traced',s.sp1_eff.n)+lensBlock+
+    '<div class="srh">M3 & footprints</div>'+
+    mr('M2 Ø',s.m2d.toFixed(2)+' mm','vi')+
+    mr('M1 Hole Ø',s.m1_hole.toFixed(2)+' mm','vi')+
+    mr('M3 sag×mer',(2*s.sx).toFixed(2)+'×'+(2*s.sy).toFixed(2)+' mm','vi')+
+    mr('Rt',s.Rt.toFixed(3)+' mm')+
+    mr('Rs',s.Rs.toFixed(3)+' mm')+
+    mr('|Rt/Rs|',Math.abs(s.Rt/s.Rs).toFixed(4))+
+    '<div class="srh">Solver residuals</div>'+
+    mr('eM',s.fin?s.fin.eM.toExponential(2):'n/a',eok?'vg':'vb')+
+    mr('eS',s.fin?s.fin.eS.toExponential(2):'n/a',eok?'vg':'vb');
+}
+
+/* ========= Layout plot ========= */
+function plotLayout(sol){
+  var traces=[];
+  function conicCurve(s,dia,col,w, holeDia){
+    var xs=[],ys=[];
+    var hd = holeDia || 0;
+    for(var i=-60;i<=60;i++){
+      var h=(dia/2)*(i/60);
+      if(Math.abs(h) < hd/2) { xs.push(null); ys.push(null); continue; }
+      var r2=h*h, disc=1-(1+s.K)*s.c*s.c*r2;
+      if(disc<0)continue;
+      xs.push(s.z0+(s.c*r2)/(1+Math.sqrt(disc)));
+      ys.push(h);
+    }
+    return{x:xs,y:ys,mode:'lines',line:{color:col,width:w||3},showlegend:false,hoverinfo:'skip'};
+  }
+  
+  function lensCurve(ls, ext, col, w, dash){
+    var xs=[], ys=[];
+    for(var i=-40;i<=40;i++){
+      var h = ext*(i/40);
+      var disc = 1 - ls.c*ls.c*h*h;
+      if(disc<0) continue;
+      var sg = ls.c*h*h / (1+Math.sqrt(disc));
+      xs.push(ls.cz + h);
+      ys.push(ls.y0 + sg);
+    }
+    return {x:xs, y:ys, mode:'lines', line:{color:col, width:w, dash:dash||'solid'}, showlegend:false, hoverinfo:'skip'};
+  }
+
+  traces.push(conicCurve(sol.m1,sol.D1,'#00bcd4',3, sol.m1_hole));
+  traces.push(conicCurve(sol.m2,sol.m2d,'#00bcd4',2.5, 0));
+  
+  var Cy=sol.tor.Cy,ext=sol.sy,m3z=[],m3y=[];
+  for(var i=0;i<=80;i++){
+    var yl=ext*(2*i/80-1),dyl=1-Cy*Cy*yl*yl;if(dyl<0)continue;
+    var zl=Cy?(Cy*yl*yl)/(1+Math.sqrt(Math.max(dyl,0))):0;
+    var yg=(yl+zl)*INV_SQRT2,zg=(-yl+zl)*INV_SQRT2+sol.zm3;
+    m3z.push(zg);m3y.push(yg);
+  }
+  traces.push({x:m3z,y:m3y,mode:'lines',line:{color:'#ff9800',width:3},showlegend:false,hoverinfo:'skip'});
+  
+  var fr=sol.sy*2.5;
+  traces.push({x:[sol.zm3-fr,sol.zm3+fr],y:[-sol.bfl,-sol.bfl],
+    mode:'lines',line:{color:'rgba(255,100,100,0.6)',width:1.5,dash:'dash'},showlegend:false,hoverinfo:'skip'});
+    
+  if(sol.lensOn && sol.ls1 && sol.ls2){
+    var lext=sol.lens_dia/2;
+    traces.push(lensCurve(sol.ls1, lext, '#4caf50', 2));
+    traces.push(lensCurve(sol.ls2, lext, '#4caf50', 2));
+    var e1 = sol.ls1.c*lext*lext/(1+Math.sqrt(Math.max(1-sol.ls1.c*sol.ls1.c*lext*lext,0)));
+    var e2 = sol.ls2.c*lext*lext/(1+Math.sqrt(Math.max(1-sol.ls2.c*sol.ls2.c*lext*lext,0)));
+    traces.push({
+      x: [sol.ls1.cz - lext, sol.ls2.cz - lext, null, sol.ls1.cz + lext, sol.ls2.cz + lext],
+      y: [sol.ls1.y0 + e1, sol.ls2.y0 + e2, null, sol.ls1.y0 + e1, sol.ls2.y0 + e2],
+      mode: 'lines', line: {color: '#4caf50', width: 1.5}, showlegend: false, hoverinfo: 'skip'
     });
-    document.getElementById('steps-text').innerHTML=stepsHtml;
+  }
+  
+  var ND=parseInt(document.getElementById('rdn').value)||7;
+  var RL=parseFloat(document.getElementById('rex').value)||50;
+  var rx=[],ry=[];
+  for(var i=0;i<ND;i++){
+    var h=sol.D1/2*(2*i/(ND-1)-1);
+    var r1=hitConic(sol.m1,mkRay([0,h,sol.startZ],[0,0,1]),false);if(!r1)continue;
+    
+    var r1radSq = r1.pt[0]*r1.pt[0] + r1.pt[1]*r1.pt[1];
+    if (r1radSq < (sol.m1_hole/2)**2) continue;
 
-    // ── Pitfalls tab ───────────────────────────────────────────
-    const pitfalls=[
-        {
-            icon:'⚡',title:'Coordinate Break scale factor',
-            body:`CB2 must use a <strong>Pickup Solve</strong> on "Tilt About X" from CB1 with scale = <strong>+1</strong>, not −1. A scale of −1 will fold the beam in the wrong direction and produce a tilted, decentred focal plane. The two CB tilts are <em>additive</em> (each 45° → 90° total) in the local coordinate frame.`
-        },
-        {
-            icon:'⚡',title:'Radius of Rotation sign (Par 1)',
-            body:`Par 1 (R<sub>s</sub> = ${Rs.toFixed(4)} mm) must have the <strong>same sign as R<sub>t</sub></strong> (${Rt.toFixed(4)} mm) for a concave toroid. A positive R<sub>s</sub> models a saddle surface, not a focusing toroid. The ratio R<sub>t</sub>/R<sub>s</sub> = ${(Rt/Rs).toFixed(4)} ≈ 2.0, consistent with the cos²(45°) = 0.5 sagittal/tangential power ratio.`
-        },
-        {
-            icon:'⚡',title:'Thickness sign after fold',
-            body:`After CB2, the local Z-axis points in the global −Y direction. The thickness to the image plane must therefore be <strong>negative</strong>: ${t_cb_to_img} mm. A positive value will propagate the beam back toward M3 rather than toward the detector.`
-        },
-        {
-            icon:'⚡',title:'M3 aperture in local frame',
-            body:`The Elliptical Aperture on the Toroidal surface is defined in the <em>local (tilted) frame</em>. Enter the footprint semi-axes directly: X (sagittal) = ${m3sx.toFixed(3)} mm, Y (meridional) = ${m3sy.toFixed(3)} mm. Do not apply any cos(45°) projection factor — OpticStudio handles the tilt internally.`
-        },
-        {
-            icon:'⚡',title:'Oversized M2 during initial optimisation',
-            body:`During optimisation of conic constants, temporarily set M2 semi-diameter larger than the footprint (e.g. ${(D1/2).toFixed(0)} mm) to avoid vignetting edge rays. Restore to the footprint value (${(m2d/2).toFixed(2)} mm) for the final performance evaluation.`
-        },
-        {
-            icon:'💡',title:'Merit function for toroid optimisation',
-            body:`To optimise R<sub>t</sub> and R<sub>s</sub> in OpticStudio: make the Toroidal surface Radius and Par 1 variable. Add two REAY operands at ±full aperture (tangential marginal rays) targeting y = ${-bfl} mm, and one REAX operand (sagittal marginal ray) also targeting y = ${-bfl} mm. This mirrors the 2×2 Newton solve used in this tool.`
-        },
-    ];
-
-    let pitHtml='<div class="steps-block">';
-    pitfalls.forEach(p=>{
-        pitHtml+=`<div class="step">
-            <div><span class="step-num">${p.icon}</span><span class="step-title">${p.title}</span></div>
-            <div class="step-body"><p style="margin:4px 0;">${p.body}</p></div>
-        </div>`;
-    });
-    pitHtml+='</div>';
-    document.getElementById('pitfalls-text').innerHTML=pitHtml;
+    var r2=hitConic(sol.m2,mkRay(r1.pt,r1.dir),false); if(!r2) continue; 
+    var r3=hitToroid(sol.tor,mkRay(r2.pt,r2.dir));if(!r3)continue;
+    
+    var rpts_x = [sol.startZ, r1.pt[2], r2.pt[2], r3.pt[2]];
+    var rpts_y = [h, r1.pt[1], r2.pt[1], r3.pt[1]];
+    
+    var pt=r3.pt, dir=r3.dir;
+    
+    if(sol.lensOn && sol.ls1 && sol.ls2){
+        var l1=hitLens(sol.ls1, mkRay(pt, dir), 1.0, sol.lensNd);
+        if(l1){
+            rpts_x.push(l1.pt[2]); rpts_y.push(l1.pt[1]);
+            var l2=hitLens(sol.ls2, mkRay(l1.pt, l1.dir), sol.lensNd, 1.0);
+            if(l2){
+                rpts_x.push(l2.pt[2]); rpts_y.push(l2.pt[1]);
+                pt = l2.pt; dir = l2.dir;
+            }
+        }
+    }
+    
+    var ty=(-sol.bfl-pt[1])/dir[1];
+    var pe=vadd(pt,vmul(dir,ty+RL));
+    rpts_x.push(pe[2], null);
+    rpts_y.push(pe[1], null);
+    
+    for(var j=0; j<rpts_x.length; j++){ rx.push(rpts_x[j]); ry.push(rpts_y[j]); }
+  }
+  
+  traces.push({x:rx,y:ry,mode:'lines',line:{color:'rgba(255,255,255,0.12)',width:1},
+               showlegend:false,hoverinfo:'skip'});
+               
+  var plotConfig = {
+    title:{text:'Optical layout — Y–Z cross‑section',font:{size:13,color:'#aaa'}},
+    paper_bgcolor:'#050505',plot_bgcolor:'#050505',
+    font:{color:'#777',size:11},
+    xaxis:{title:{text:'Z (mm)'},gridcolor:'#181818',zerolinecolor:'#252525',
+           scaleanchor:'y',scaleratio:1},
+    yaxis:{title:{text:'Y (mm)'},gridcolor:'#181818',zerolinecolor:'#252525'},
+    margin:{l:46,r:14,t:34,b:38},showlegend:false,dragmode:'pan'
+  };
+  
+  Plotly.newPlot('plotDiv',traces,plotConfig,{responsive:true,displayModeBar:true,scrollZoom:true,
+     modeBarButtonsToRemove:['toImage','lasso2d','select2d']});
 }
 
-// ══════════════════════════════════════════════════════════════
-// OPTICAL ENGINE  (unchanged from v3.4)
-// ══════════════════════════════════════════════════════════════
-class Vec3{
-    constructor(x,y,z){this.x=x;this.y=y;this.z=z;}
-    static zero(){return new Vec3(0,0,0);}
-    add(v){return new Vec3(this.x+v.x,this.y+v.y,this.z+v.z);}
-    sub(v){return new Vec3(this.x-v.x,this.y-v.y,this.z-v.z);}
-    mul(s){return new Vec3(this.x*s,this.y*s,this.z*s);}
-    dot(v){return this.x*v.x+this.y*v.y+this.z*v.z;}
-    mag(){return Math.sqrt(this.x*this.x+this.y*this.y+this.z*this.z);}
-    normalize(){const m=this.mag();return m===0?Vec3.zero():this.mul(1/m);}
-}
-class Ray{constructor(o,d){this.p=o;this.k=d.normalize();}
-    propagate(t){return this.p.add(this.k.mul(t));}}
-
-class ConicSurface{
-    constructor(z0,R,K,ap){this.z0=z0;this.R=R;this.K=K;this.ap=ap;this.c=R!==0?1/R:0;}
-    intersect(ray){
-        const p=ray.p.sub(new Vec3(0,0,this.z0)),k=ray.k,F=(1+this.K)*this.c;
-        const A=this.c*(k.x*k.x+k.y*k.y)+F*k.z*k.z;
-        const B=2*this.c*(p.x*k.x+p.y*k.y)+2*F*p.z*k.z-2*k.z;
-        const C=this.c*(p.x*p.x+p.y*p.y)+F*p.z*p.z-2*p.z;
-        let t;
-        if(Math.abs(A)<1e-9){t=-C/B;}
-        else{const d=B*B-4*A*C;if(d<0)return null;
-             const t1=(-B-Math.sqrt(d))/(2*A),t2=(-B+Math.sqrt(d))/(2*A);t=t1>1e-5?t1:t2;}
-        const hit=ray.propagate(t),hl=hit.sub(new Vec3(0,0,this.z0));
-        if(hl.x*hl.x+hl.y*hl.y>(this.ap/2)*(this.ap/2))return null;
-        const nm=new Vec3(-this.c*hl.x,-this.c*hl.y,1-(this.K+1)*this.c*hl.z).normalize();
-        const dot=ray.k.dot(nm);
-        return{point:hit,normal:nm,out_dir:ray.k.sub(nm.mul(2*dot)),dist:0};
-    }
-}
-
-class TiltedToroid{
-    constructor(z0,Rt,Rs,ang){
-        this.z0=z0;this.Rt=Rt;this.Rs=Rs;
-        this.tilt=ang*Math.PI/180;
-        this.cosT=Math.cos(this.tilt);this.sinT=Math.sin(this.tilt);
-    }
-    toLocal(p){const dz=p.z-this.z0;
-        return new Vec3(p.x,p.y*this.cosT-dz*this.sinT,p.y*this.sinT+dz*this.cosT);}
-    toGlobalVec(v){
-        return new Vec3(v.x,v.y*this.cosT+v.z*this.sinT,-v.y*this.sinT+v.z*this.cosT);}
-    static sag(x,y,Cx,Cy){
-        const dX=1-Cx*Cx*x*x,dY=1-Cy*Cy*y*y;
-        if(dX<0||dY<0)return null;
-        return(Cx*x*x)/(1+Math.sqrt(dX))+(Cy*y*y)/(1+Math.sqrt(dY));}
-    intersect(ray){
-        const np=new Vec3(0,this.sinT,this.cosT),dn=ray.k.dot(np);
-        if(Math.abs(dn)<1e-6)return null;
-        let tc=new Vec3(0,0,this.z0).sub(ray.p).dot(np)/dn;
-        const Cx=1/this.Rs,Cy=1/this.Rt;
-        for(let i=0;i<20;i++){
-            const loc=this.toLocal(ray.propagate(tc));
-            const zs=TiltedToroid.sag(loc.x,loc.y,Cx,Cy);if(zs===null)return null;
-            const kl=this.toLocal(ray.p.add(ray.k)).sub(this.toLocal(ray.p));
-            if(Math.abs(kl.z)<1e-12)break;tc-=(loc.z-zs)/kl.z;}
-        const hit=ray.propagate(tc),loc=this.toLocal(hit);
-        const Cx2=1/this.Rs,Cy2=1/this.Rt;
-        const dX=1-Cx2*Cx2*loc.x*loc.x,dY=1-Cy2*Cy2*loc.y*loc.y;
-        if(dX<=0||dY<=0)return null;
-        const nl=new Vec3(-Cx2*loc.x/Math.sqrt(dX),-Cy2*loc.y/Math.sqrt(dY),1).normalize();
-        const ng=this.toGlobalVec(nl),dot=ray.k.dot(ng);
-        return{point:hit,normal:ng,out_dir:ray.k.sub(ng.mul(2*dot)),dist:tc};
-    }
-}
-
-function computeFoV(fn,D,det){
-    const EFL=fn*D,PS=206265/EFL,fa=det*PS;
-    return{EFL,plateScale:PS,fov_as:fa,fov_amin:fa/60,fov_deg:fa/3600};}
-
-function buildPupil(N){
-    const pts=[{px:0,py:0,rho:0}];
-    for(let r=1;r<=N;r++){const n=6*r,rho=r/N;
-        for(let i=0;i<n;i++){const a=2*Math.PI*i/n;
-            pts.push({px:rho*Math.cos(a),py:rho*Math.sin(a),rho});}}
-    return pts;}
-
-function computeFootprints(m1,m2_big,m3surf,D1){
-    const pupil=buildPupil(20);
-    const m2r=[],m3lx=[],m3ly=[];
-    for(const{px,py}of pupil){
-        const h1=m1.intersect(new Ray(new Vec3(px*D1/2,py*D1/2,-1000),new Vec3(0,0,1)));
-        if(!h1)continue;
-        const h2=m2_big.intersect(new Ray(h1.point,h1.out_dir));if(!h2)continue;
-        m2r.push(Math.sqrt(h2.point.x*h2.point.x+h2.point.y*h2.point.y));
-        const h3=m3surf.intersect(new Ray(h2.point,h2.out_dir));if(!h3)continue;
-        const loc=m3surf.toLocal(h3.point);m3lx.push(loc.x);m3ly.push(loc.y);
-    }
-    const m2_dia=2*Math.max(...m2r);
-    const m3_semi_x=(Math.max(...m3lx)-Math.min(...m3lx))/2;
-    const m3_semi_y=(Math.max(...m3ly)-Math.min(...m3ly))/2;
-    const m3_cx=(Math.max(...m3lx)+Math.min(...m3lx))/2;
-    const m3_cy=(Math.max(...m3ly)+Math.min(...m3ly))/2;
-    return{m2_dia,m3_semi_x,m3_semi_y,m3_cx,m3_cy,m2_rmax:m2_dia/2};
-}
-
-function solveSystem(){
-    const g=id=>parseFloat(document.getElementById(id).value);
-    const D1=g('m1_dia'),R1=g('m1_roc'),K1=g('m1_k');
-    const R2=g('m2_roc'),K2=g('m2_k'),d1=g('d1');
-    const d_m3=g('m3_back'),bfl=g('target_bfl');
-    const det=g('det_diag'),lmm=g('lambda_nm')*1e-6;
-    const z_m1=0,z_m2=-d1,z_m3=d_m3,TY=-bfl;
-    const m1=new ConicSurface(z_m1,R1,K1,D1);
-    const m2_big=new ConicSurface(z_m2,R2,K2,D1);
-    const h1m=m1.intersect(new Ray(new Vec3(0,D1/2,-1000),new Vec3(0,0,1)));
-    const h2m=m2_big.intersect(new Ray(h1m.point,h1m.out_dir));
-    let sf=0,sod=1000,znf=0;
-    if(h2m){
-        const tf=-h2m.point.y/h2m.out_dir.y;
-        sf=(D1/2)/Math.abs(h2m.out_dir.y/h2m.out_dir.z)/D1;
-        znf=h2m.point.z+tf*h2m.out_dir.z;sod=znf-z_m3;
-    }
-    const P=1/bfl-1/sod,Rb=2/P,c45=Math.cos(Math.PI/4);
-    let Rt=Rb*c45,Rs=Rb/c45;
-    function err(tRt,tRs){
-        const s=new TiltedToroid(z_m3,tRt,tRs,45);
-        const h1t=m1.intersect(new Ray(new Vec3(0, D1/2,-1000),new Vec3(0,0,1)));
-        const h2t=m2_big.intersect(new Ray(h1t.point,h1t.out_dir));
-        const h3t=s.intersect(new Ray(h2t.point,h2t.out_dir));
-        const h1b=m1.intersect(new Ray(new Vec3(0,-D1/2,-1000),new Vec3(0,0,1)));
-        const h2b=m2_big.intersect(new Ray(h1b.point,h1b.out_dir));
-        const h3b=s.intersect(new Ray(h2b.point,h2b.out_dir));
-        if(!h3t||!h3b)return null;
-        const mt=h3t.out_dir.z/h3t.out_dir.y,mb=h3b.out_dir.z/h3b.out_dir.y;
-        if(Math.abs(mt-mb)<1e-12)return null;
-        const Yc=((h3b.point.z-h3b.point.y*mb)-(h3t.point.z-h3t.point.y*mt))/(mt-mb);
-        const h1s=m1.intersect(new Ray(new Vec3(D1/2,0,-1000),new Vec3(0,0,1)));
-        const h2s=m2_big.intersect(new Ray(h1s.point,h1s.out_dir));
-        const h3s=s.intersect(new Ray(h2s.point,h2s.out_dir));
-        if(!h3s)return null;
-        const ts=-h3s.point.x/h3s.out_dir.x;
-        const Ys=h3s.point.y+ts*h3s.out_dir.y;
-        const tu=Math.abs(h3t.out_dir.z)/Math.abs(h3t.out_dir.y);
-        return{eM:Yc-TY,eS:Ys-TY,tan_u:tu};
-    }
-    const st=0.5,dp=0.85;
-    for(let i=0;i<80;i++){
-        const r0=err(Rt,Rs);if(!r0)break;
-        const rT=err(Rt+st,Rs),rS=err(Rt,Rs+st);if(!rT||!rS)break;
-        const J00=(rT.eM-r0.eM)/st,J01=(rS.eM-r0.eM)/st;
-        const J10=(rT.eS-r0.eS)/st,J11=(rS.eS-r0.eS)/st;
-        const det2=J00*J11-J01*J10;if(Math.abs(det2)<1e-20)break;
-        Rt-=dp*(J11*r0.eM-J01*r0.eS)/det2;
-        Rs-=dp*(-J10*r0.eM+J00*r0.eS)/det2;
-        if(Math.abs(r0.eM)<1e-7&&Math.abs(r0.eS)<1e-7)break;
-    }
-    const fin=err(Rt,Rs);
-    const ff=(fin&&fin.tan_u>0)?((D1/2)/fin.tan_u)/D1:0;
-    const m3surf=new TiltedToroid(z_m3,Rt,Rs,45);
-    const fp=computeFootprints(m1,m2_big,m3surf,D1);
-    const m2=new ConicSurface(z_m2,R2,K2,fp.m2_dia);
-    const fvN=computeFoV(sf,D1,det),fvE=computeFoV(ff,D1,det);
-    const pupil=buildPupil(10);
-    const sN=[],sE=[];
-    for(const{px,py,rho}of pupil){
-        const h1=m1.intersect(new Ray(new Vec3(px*D1/2,py*D1/2,-500),new Vec3(0,0,1)));
-        if(!h1)continue;
-        const h2=m2_big.intersect(new Ray(h1.point,h1.out_dir));if(!h2)continue;
-        const tn=(znf-h2.point.z)/h2.out_dir.z;
-        const fn2=h2.point.add(h2.out_dir.mul(tn));
-        sN.push({x:fn2.x*1000,y:fn2.y*1000,rho});
-        const h3=m3surf.intersect(new Ray(h2.point,h2.out_dir));if(!h3)continue;
-        const te=(-bfl-h3.point.y)/h3.out_dir.y;
-        const fe=h3.point.add(h3.out_dir.mul(te));
-        sE.push({x:fe.x*1000,z:fe.z*1000,rho});
-    }
-    const cxN=sN.reduce((s,p)=>s+p.x,0)/sN.length,cyN=sN.reduce((s,p)=>s+p.y,0)/sN.length;
-    const cxE=sE.reduce((s,p)=>s+p.x,0)/sE.length,czE=sE.reduce((s,p)=>s+p.z,0)/sE.length;
-    sN.forEach(p=>{p.x-=cxN;p.y-=cyN;});sE.forEach(p=>{p.x-=cxE;p.z-=czE;});
-    const rms=(pts,a,b)=>{const r2=pts.map(p=>p[a]*p[a]+p[b]*p[b]);
-        return{rms:Math.sqrt(r2.reduce((s,v)=>s+v,0)/r2.length),rmax:Math.sqrt(Math.max(...r2))};};
-    const stN=rms(sN,'x','y'),stE=rms(sE,'x','z');
-    const airN=1.22*lmm*sf*1e6,airE=1.22*lmm*ff*1e6;
-    return{Rt,Rs,m1,m2,m2_big,z_m3,target_bfl:bfl,D1,det,lmm,
-           starting_f:sf,final_f:ff,final:fin,
-           fov_native:fvN,fov_eff:fvE,z_native_focus:znf,
-           spotsNative:sN,spotsEff:sE,stN,stE,airN,airE,
-           fp,m3surf,m3dia:2*Math.max(fp.m3_semi_x,fp.m3_semi_y)};
-}
-
-function runOptimization(){
-    const st2=document.getElementById('status-msg');
-    st2.textContent='Optimising…';st2.style.color='var(--accent)';
-    if(isMobile()){
-        const sb=document.getElementById('sidebar'),btn=document.getElementById('sidebarToggle');
-        if(sb.classList.contains('open')){sb.classList.remove('open');btn.classList.remove('open');
-            btn.setAttribute('aria-expanded','false');}
-    }
-    setTimeout(()=>{
-        const s=solveSystem();
-        _lastSol=s;  // [28] store for Zemax export
-        document.getElementById('zemaxBtn').disabled=false;
-        buildResults(s);
-        st2.textContent='Trace Complete';st2.style.color='#666';
-        plotSystem(s);plotSpots(s);
-    },50);
-}
-
-function buildResults(s){
-    const p=document.getElementById('results');
-    const rd=Math.abs(s.Rt-s.Rs);
-    const eM_ok=s.final&&Math.abs(s.final.eM)<0.001,eS_ok=s.final&&Math.abs(s.final.eS)<0.001;
-    const fv=f=>`${f.fov_amin.toFixed(2)}′ (${f.fov_deg.toFixed(3)}°)`;
-    const ps=f=>`${f.plateScale.toFixed(2)} ″/mm`,el=f=>`${(f.EFL/1000).toFixed(3)} m`;
-    const m3s=(2*s.fp.m3_semi_x).toFixed(2),m3m=(2*s.fp.m3_semi_y).toFixed(2);
-    const m3e=(2*Math.max(s.fp.m3_semi_x,s.fp.m3_semi_y)).toFixed(2);
-    p.innerHTML=`
-        <div class="sub-header">M1 + M2 (native)</div>
-        <div class="metric-row"><span class="metric-label">F#</span><span class="metric-val val-info">f/${s.starting_f.toFixed(2)}</span></div>
-        <div class="metric-row"><span class="metric-label">EFL</span><span class="metric-val">${el(s.fov_native)}</span></div>
-        <div class="metric-row"><span class="metric-label">Plate scale</span><span class="metric-val">${ps(s.fov_native)}</span></div>
-        <div class="metric-row"><span class="metric-label">FoV (${s.det} mm)</span><span class="metric-val val-warn">${fv(s.fov_native)}</span></div>
-        <div class="metric-row"><span class="metric-label">Spot RMS/max</span><span class="metric-val">${s.stN.rms.toFixed(2)} / ${s.stN.rmax.toFixed(2)} μm</span></div>
-        <div class="sub-header">M1 + M2 + M3 (effective)</div>
-        <div class="metric-row"><span class="metric-label">F#</span><span class="metric-val val-info">f/${s.final_f.toFixed(2)}</span></div>
-        <div class="metric-row"><span class="metric-label">EFL</span><span class="metric-val">${el(s.fov_eff)}</span></div>
-        <div class="metric-row"><span class="metric-label">Plate scale</span><span class="metric-val">${ps(s.fov_eff)}</span></div>
-        <div class="metric-row"><span class="metric-label">FoV (${s.det} mm)</span><span class="metric-val val-warn">${fv(s.fov_eff)}</span></div>
-        <div class="metric-row"><span class="metric-label">Spot RMS/max</span>
-            <span class="metric-val ${s.stE.rms>s.airE?'val-bad':'val-good'}">${s.stE.rms.toFixed(2)} / ${s.stE.rmax.toFixed(2)} μm</span></div>
-        <div class="sub-header">Mirror Footprints</div>
-        <div class="metric-row"><span class="metric-label">M2 ⌀</span><span class="metric-val val-info">${s.fp.m2_dia.toFixed(2)} mm</span></div>
-        <div class="metric-row"><span class="metric-label">M3 sag × mer</span><span class="metric-val val-info">${m3s} × ${m3m} mm</span></div>
-        <div class="metric-row"><span class="metric-label">M3 encircling ⌀</span><span class="metric-val">${m3e} mm</span></div>
-        <div class="metric-row"><span class="metric-label">M3 axis ratio b/a</span><span class="metric-val">${(s.fp.m3_semi_y/s.fp.m3_semi_x).toFixed(3)}</span></div>
-        <div class="sub-header">M3 Toroid</div>
-        <div class="metric-row"><span class="metric-label">Rt (tang.)</span><span class="metric-val">${s.Rt.toFixed(2)} mm</span></div>
-        <div class="metric-row"><span class="metric-label">Rs (sag.)</span><span class="metric-val">${s.Rs.toFixed(2)} mm</span></div>
-        <div class="metric-row"><span class="metric-label">Rt / Rs</span><span class="metric-val">${(s.Rt/s.Rs).toFixed(3)}</span></div>
-        <div class="metric-row"><span class="metric-label">ΔR</span>
-            <span class="metric-val ${Math.abs(s.Rt-s.Rs)>200?'val-bad':'val-good'}">${rd.toFixed(2)} mm</span></div>
-        <div class="sub-header">Solver residuals</div>
-        <div class="metric-row"><span class="metric-label">Meridional eM</span>
-            <span class="metric-val ${eM_ok?'val-good':'val-bad'}">${s.final?s.final.eM.toExponential(2):'n/a'} mm</span></div>
-        <div class="metric-row"><span class="metric-label">Sagittal eS</span>
-            <span class="metric-val ${eS_ok?'val-good':'val-bad'}">${s.final?s.final.eS.toExponential(2):'n/a'} mm</span></div>`;
-}
-
-function plotSystem(sol){
-    const traces=[],blue='#00bcd4',orange='#ff9800',fp_col='rgba(255,180,0,0.55)';
-    const mobile=isMobile();
-    function drawConic(surf,dia,color){
-        const y=[],z=[];
-        for(let i=-40;i<=40;i++){
-            const h=(dia/2)*(i/40),r2=h*h;y.push(h);
-            z.push(surf.z0+(surf.c*r2)/(1+Math.sqrt(Math.max(0,1-(1+surf.K)*surf.c*surf.c*r2))));}
-        return{x:z,y,mode:'lines',line:{color,width:3},hoverinfo:'skip'};}
-    traces.push(drawConic(sol.m1,sol.D1,blue));
-    traces.push(drawConic(sol.m2,sol.fp.m2_dia,blue));
-    const m2r=sol.fp.m2_dia/2,th2=Array.from({length:61},(_,i)=>-Math.PI+2*Math.PI*i/60);
-    traces.push({x:th2.map(t=>sol.m2.z0+(sol.m2.c*Math.pow(m2r*Math.sin(t),2))/(1+Math.sqrt(Math.max(0,1-(1+sol.m2.K)*sol.m2.c*sol.m2.c*Math.pow(m2r*Math.sin(t),2))))),
-        y:th2.map(t=>m2r*Math.sin(t)),mode:'lines',
-        line:{color:fp_col,width:1.5,dash:'dot'},showlegend:false,hoverinfo:'skip'});
-    const m3_mer_ext=sol.fp.m3_semi_y,Cy=1/sol.Rt,cT=Math.cos(Math.PI/4),sT=Math.sin(Math.PI/4);
-    const m3y=[],m3z=[];
-    for(let i=0;i<81;i++){const yl=m3_mer_ext*((i/80)*2-1),dY=1-Cy*Cy*yl*yl;
-        const zl=dY>0?(Cy*yl*yl)/(1+Math.sqrt(dY)):0;
-        m3y.push(yl*cT+zl*sT);m3z.push(sol.z_m3-yl*sT+zl*cT);}
-    traces.push({x:m3z,y:m3y,mode:'lines',line:{color:orange,width:3},name:'M3',hoverinfo:'skip'});
-    const a=sol.fp.m3_semi_x,b=sol.fp.m3_semi_y;
-    const thE=Array.from({length:61},(_,i)=>2*Math.PI*i/60);
-    const ell_gy=[],ell_gz=[];
-    for(let i=0;i<thE.length;i++){
-        ell_gy.push(b*Math.sin(thE[i])*cT);
-        ell_gz.push(sol.z_m3+b*Math.sin(thE[i])*(-sT));}
-    traces.push({x:ell_gz,y:ell_gy,mode:'lines',
-        line:{color:fp_col,width:1.5,dash:'dot'},showlegend:false,hoverinfo:'skip'});
-    const dn=parseInt(document.getElementById('ray_density').value);
-    const rx2=parseFloat(document.getElementById('ray_len').value);
-    const xr=[],yr=[];
-    for(let i=0;i<dn;i++){
-        const h=(sol.D1/2)*((2*i/(dn-1))-1);
-        const h1=sol.m1.intersect(new Ray(new Vec3(0,h,-500),new Vec3(0,0,1)));if(!h1)continue;
-        const h2=sol.m2_big.intersect(new Ray(h1.point,h1.out_dir));if(!h2)continue;
-        const h3=sol.m3surf.intersect(new Ray(h2.point,h2.out_dir));if(!h3)continue;
-        const tf=(-sol.target_bfl-h3.point.y)/h3.out_dir.y;
-        const pe=h3.point.add(h3.out_dir.mul(tf+rx2));
-        xr.push(-200,h1.point.z,h2.point.z,h3.point.z,pe.z,null);
-        yr.push(h,h1.point.y,h2.point.y,h3.point.y,pe.y,null);}
-    traces.push({x:xr,y:yr,mode:'lines',line:{color:'rgba(255,255,255,0.18)',width:1},
-        showlegend:false,hoverinfo:'skip'});
-    Plotly.newPlot('plotDiv',traces,{
-        title:{text:'Optical Layout · Footprint outlines (dotted)',font:{size:mobile?11:13}},
-        paper_bgcolor:'#050505',plot_bgcolor:'#050505',font:{color:'#aaa',size:mobile?9:11},
-        xaxis:{title:{text:'Z (mm)',standoff:mobile?2:6},gridcolor:'#222',zerolinecolor:'#444',
-               scaleanchor:'y',scaleratio:1},
-        yaxis:{title:{text:'Y (mm)',standoff:mobile?2:6},gridcolor:'#222',zerolinecolor:'#444'},
-        margin:mobile?{l:38,r:8,t:30,b:36}:{l:50,r:20,t:40,b:40},
-        showlegend:false,dragmode:'pan'
-    },{responsive:true,displayModeBar:!mobile,scrollZoom:!mobile,
-       modeBarButtonsToRemove:['toImage','lasso2d','select2d']});
+/* ========= Spot plots (eff vs nat F/#) ========= */
+function oneSpot(divId,sp,title,airR){
+  if(!sp || !sp.pts || !sp.pts.length){
+    Plotly.newPlot(divId,[],{
+      paper_bgcolor:'#0a0a0a',plot_bgcolor:'#0a0a0a',
+      title:{text:title+' — no rays',font:{size:10,color:'#666'}},
+      margin:{l:34,r:6,t:28,b:30}
+    },{responsive:true,displayModeBar:false});return;
+  }
+  function rclr(rho){return'hsl('+Math.round(240*(1-rho))+',85%,58%)';}
+  var rMax=Math.max(sp.rmax,airR||1)*1.8;
+  var th=[];for(var i=0;i<=100;i++)th.push(2*Math.PI*i/100);
+  Plotly.newPlot(divId,[
+    {x:sp.pts.map(function(p){return p.x;}),y:sp.pts.map(function(p){return p.z;}),
+     mode:'markers',marker:{color:sp.pts.map(function(p){return rclr(p.rho);}),
+     size:3.5,opacity:.9},showlegend:false,hoverinfo:'skip'},
+    {x:th.map(function(t){return airR*Math.cos(t);}),
+     y:th.map(function(t){return airR*Math.sin(t);}),
+     mode:'lines',line:{color:'rgba(255,255,255,0.4)',dash:'dash',width:1.5},
+     showlegend:false,hoverinfo:'skip'}
+  ],{
+    title:{text:title,font:{size:11,color:'#aaa'}},
+    paper_bgcolor:'#0a0a0a',plot_bgcolor:'#0a0a0a',
+    font:{color:'#777',size:10},
+    xaxis:{title:{text:'X (µm)'},range:[-rMax,rMax],
+           gridcolor:'#161616',zerolinecolor:'#252525',scaleanchor:'y',scaleratio:1},
+    yaxis:{title:{text:'Z (µm)'},range:[-rMax,rMax],
+           gridcolor:'#161616',zerolinecolor:'#252525'},
+    margin:{l:40,r:8,t:30,b:36},showlegend:false,
+    annotations:[{x:0,y:1,xref:'paper',yref:'paper',xanchor:'left',yanchor:'top',
+      showarrow:false,font:{size:9,color:'#888'},bgcolor:'rgba(0,0,0,.75)',
+      text:'RMS '+sp.rms.toFixed(2)+'µm  max '+sp.rmax.toFixed(2)+'µm'}]
+  },{responsive:true,displayModeBar:false});
 }
 
 function plotSpots(sol){
-    const mobile=isMobile();
-    const rhoColor=rho=>`hsl(${Math.round(240*(1-rho))},90%,60%)`;
-    function airyCircle(r,xa,ya){
-        const th=Array.from({length:101},(_,i)=>2*Math.PI*i/100);
-        return{x:th.map(t=>r*Math.cos(t)),y:th.map(t=>r*Math.sin(t)),
-               mode:'lines',line:{color:'rgba(255,255,255,0.55)',dash:'dash',width:1.5},
-               showlegend:false,hoverinfo:'none',xaxis:xa,yaxis:ya};}
-    const nat_c=sol.spotsNative.map(p=>rhoColor(p.rho));
-    const eff_c=sol.spotsEff.map(p=>rhoColor(p.rho));
-    const rN=Math.max(sol.stN.rmax,sol.airN)*1.5,rE=Math.max(sol.stE.rmax,sol.airE)*1.5;
-    const lnm=Math.round(sol.lmm*1e6);
-    const as={xref:'paper',yref:'paper',showarrow:false,
-              font:{size:mobile?8:9,color:'#aaa'},bgcolor:'rgba(0,0,0,0.55)'};
-    const baseTraces=[
-        {x:sol.spotsNative.map(p=>p.x),y:sol.spotsNative.map(p=>p.y),mode:'markers',
-         marker:{color:nat_c,size:3,opacity:0.85},showlegend:false,hoverinfo:'none',xaxis:'x1',yaxis:'y1'},
-        airyCircle(sol.airN,'x1','y1'),
-        {x:sol.spotsEff.map(p=>p.x),y:sol.spotsEff.map(p=>p.z),mode:'markers',
-         marker:{color:eff_c,size:3,opacity:0.85},showlegend:false,hoverinfo:'none',xaxis:'x2',yaxis:'y2'},
-        airyCircle(sol.airE,'x2','y2')];
-    const baseLayout={paper_bgcolor:'#0a0a0a',plot_bgcolor:'#0a0a0a',
-        font:{color:'#aaa',size:mobile?8:10},showlegend:false};
-    let layout;
-    if(mobile){
-        layout={...baseLayout,margin:{l:36,r:8,t:28,b:36},
-            grid:{rows:2,columns:1,pattern:'independent',roworder:'top to bottom'},
-            xaxis:{domain:[0,1],title:{text:'X (μm)',standoff:2},range:[-rN,rN],
-                   gridcolor:'#1e1e1e',zerolinecolor:'#333',scaleanchor:'y',scaleratio:1},
-            yaxis:{title:{text:'Y (μm)',standoff:2},range:[-rN,rN],gridcolor:'#1e1e1e',zerolinecolor:'#333'},
-            xaxis2:{domain:[0,1],title:{text:'X sag. (μm)',standoff:2},range:[-rE,rE],
-                    gridcolor:'#1e1e1e',zerolinecolor:'#333',scaleanchor:'y2',scaleratio:1},
-            yaxis2:{title:{text:'Z mer. (μm)',standoff:2},range:[-rE,rE],
-                    gridcolor:'#1e1e1e',zerolinecolor:'#333',anchor:'x2'},
-            annotations:[
-                {...as,x:.5,y:1.0,xanchor:'center',yanchor:'top',text:`<b>Native f/${sol.starting_f.toFixed(1)}</b>`},
-                {...as,x:.02,y:.52,xanchor:'left',yanchor:'top',text:`RMS ${sol.stN.rms.toFixed(1)}μm · Airy ${sol.airN.toFixed(1)}μm`},
-                {...as,x:.5,y:.50,xanchor:'center',yanchor:'top',text:`<b>Effective f/${sol.final_f.toFixed(1)}</b>`},
-                {...as,x:.02,y:.02,xanchor:'left',yanchor:'bottom',text:`RMS ${sol.stE.rms.toFixed(1)}μm · Airy ${sol.airE.toFixed(1)}μm (λ=${lnm}nm)`}
-            ]};
-    }else{
-        layout={...baseLayout,margin:{l:48,r:16,t:34,b:40},
-            grid:{rows:1,columns:2,pattern:'independent'},
-            xaxis:{domain:[0,.46],title:{text:'X (μm)',standoff:4},range:[-rN,rN],
-                   gridcolor:'#1e1e1e',zerolinecolor:'#333',scaleanchor:'y',scaleratio:1},
-            yaxis:{title:{text:'Y (μm)',standoff:4},range:[-rN,rN],gridcolor:'#1e1e1e',zerolinecolor:'#333'},
-            xaxis2:{domain:[.54,1],title:{text:'X sagittal (μm)',standoff:4},range:[-rE,rE],
-                    gridcolor:'#1e1e1e',zerolinecolor:'#333',scaleanchor:'y2',scaleratio:1},
-            yaxis2:{title:{text:'Z meridional (μm)',standoff:4},range:[-rE,rE],
-                    gridcolor:'#1e1e1e',zerolinecolor:'#333',anchor:'x2'},
-            annotations:[
-                {...as,x:.23,y:1.0,xanchor:'center',yanchor:'top',
-                 text:`<b>Native f/${sol.starting_f.toFixed(2)}</b> · EFL ${(sol.fov_native.EFL/1000).toFixed(2)} m`},
-                {...as,x:.77,y:1.0,xanchor:'center',yanchor:'top',
-                 text:`<b>Effective f/${sol.final_f.toFixed(2)}</b> · EFL ${(sol.fov_eff.EFL/1000).toFixed(2)} m`},
-                {...as,x:.01,y:.01,xanchor:'left',yanchor:'bottom',
-                 text:`RMS ${sol.stN.rms.toFixed(2)}μm  max ${sol.stN.rmax.toFixed(2)}μm<br>Airy r=${sol.airN.toFixed(2)}μm (λ=${lnm}nm)`},
-                {...as,x:.54,y:.01,xanchor:'left',yanchor:'bottom',
-                 text:`RMS ${sol.stE.rms.toFixed(2)}μm  max ${sol.stE.rmax.toFixed(2)}μm<br>Airy r=${sol.airE.toFixed(2)}μm (λ=${lnm}nm)`}
-            ]};}
-    Plotly.newPlot('spotDiv',baseTraces,layout,{responsive:true,displayModeBar:false,staticPlot:mobile});
+  var tag=sol.lensOn?' +lens':'';
+  var titleEff0='On‑axis Eff f/'+sol.eff_ff.toFixed(2)+'  λ='+Math.round(sol.lnm)+'nm'+tag;
+  var titleEff1='Edge Eff '+sol.halfFov.toFixed(4)+'°'+tag;
+  var titleNat0='On‑axis Nat f/'+sol.nat_ff.toFixed(2)+'  λ='+Math.round(sol.lnm)+'nm'+tag;
+  var titleNat1='Edge Nat '+sol.halfFov.toFixed(4)+'°'+tag;
+
+  oneSpot('s0',sol.sp0_eff,titleEff0,sol.airR);
+  oneSpot('s1',sol.sp1_eff,titleEff1,sol.airR);
+  oneSpot('s2',sol.sp0_nat,titleNat0,sol.airR);
+  oneSpot('s3',sol.sp1_nat,titleNat1,sol.airR);
 }
 
-let _rt;
-window.addEventListener('resize',()=>{clearTimeout(_rt);_rt=setTimeout(()=>{
-    Plotly.Plots.resize('plotDiv');Plotly.Plots.resize('spotDiv');},150);});
-window.onload=runOptimization;
+/* ========= Zemax export ========= */
+function openZ(){if(!SOL)return;buildZemax(SOL);document.getElementById('zmod').classList.add('open');}
+function closeZ(){document.getElementById('zmod').classList.remove('open');}
+function bdClick(e){if(e.target===e.currentTarget)closeZ();}
+function swTab(name,btn){
+  document.querySelectorAll('.tp').forEach(function(p){p.classList.remove('act');});
+  document.querySelectorAll('.tb').forEach(function(b){b.classList.remove('act');});
+  document.getElementById('tp-'+name).classList.add('act');btn.classList.add('act');
+}
+function cpy(id,btn){
+  var txt=(document.getElementById(id).innerText||'').trim();
+  function done(){btn.textContent='Copied!';btn.classList.add('ok');
+    setTimeout(function(){btn.textContent='Copy LDE';btn.classList.remove('ok');},2000);}
+  if(navigator.clipboard)navigator.clipboard.writeText(txt).then(done).catch(done);
+  else{var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);
+       ta.select();document.execCommand('copy');document.body.removeChild(ta);done();}
+}
+function chip(k,v){return'<div class="sc">'+k+'=<span>'+v+'</span></div>';}
+
+/* Build classical sequential LDE */
+function buildZemax(s){
+  var d_m2_m3=s.zm3+s.d1;
+  document.getElementById('zsi').innerHTML=
+    chip('Native F#','f/'+s.nat_ff.toFixed(3))+
+    chip('Eff F#','f/'+s.eff_ff.toFixed(3))+
+    chip('EFL', (s.EFL_eff/1000).toFixed(3)+' m')+
+    chip('BFL',s.bfl.toFixed(2)+' mm')+
+    chip('Rt',s.Rt.toFixed(2)+' mm')+
+    chip('Rs',s.Rs.toFixed(2)+' mm')+
+    (s.lensOn?chip('Lens',s.glass):'');
+  function row(a){
+    return(a[0]+'      ').slice(0,4)+' '+
+      (a[1]+'           ').slice(0,13)+' '+
+      (a[2]+'           ').slice(0,12)+' '+
+      (a[3]+'           ').slice(0,12)+' '+
+      (a[4]+'      ').slice(0,9)+' '+
+      (a[5]+'      ').slice(0,9);
+  }
+  var HDR=row(['Surf','Type','Radius','Thickness','Glass','SemiDia']);
+  var lines=[HDR,Array(HDR.length+1).join('─')];
+  lines.push(row(['OBJ','Standard','Infinity','Infinity','','0.0']));
+  lines.push(row(['1','Standard',s.R1.toFixed(3),(-s.d1).toFixed(3),'MIRROR',(s.D1/2).toFixed(1)]));
+  lines.push(row(['2','Standard',s.R2.toFixed(3),d_m2_m3.toFixed(3),'MIRROR',(s.m2d/2).toFixed(2)]));
+  lines.push(row(['3','Coordinate','Infinity','0','Tilt/Dec','0']));
+  lines.push('   Tilt X  -45.0');
+  lines.push(row(['4','Toroidal',s.Rt.toFixed(4),'0','MIRROR',Math.max(s.sx,s.sy).toFixed(2)]));
+  lines.push('   Par1  '+s.Rs.toFixed(4));
+  lines.push(row(['5','Coordinate','Infinity','0','Undo tilt','0']));
+  var curSurf=6;
+  if(s.lensOn){
+    var lpos=gv('lpos'),lr1=gv('lr1'),lr2=gv('lr2'),lct=gv('lct');
+    var th_front=(s.bfl-lpos).toFixed(3);
+    lines.push(row([String(curSurf),'Standard',lr1.toFixed(3),th_front,s.glass,(s.lens_dia/2).toFixed(1)]));
+    curSurf++;
+    var r2txt=Math.abs(lr2)<0.5?'Infinity':lr2.toFixed(3);
+    lines.push(row([String(curSurf),'Standard',r2txt,lct.toFixed(3),'',(s.lens_dia/2).toFixed(1)]));
+    curSurf++;
+  }
+  var remBfl=s.lensOn?(lpos):s.bfl;
+  lines.push(row([String(curSurf),'Image','Infinity',remBfl.toFixed(3),'',''+(s.det/2).toFixed(1)]));
+  document.getElementById('lde-t').innerText=lines.join('\n');
+  document.getElementById('stp-t').innerHTML=
+    '<div class="stp"><div class="stt">1. Insert Cassegrain mirrors</div>'+
+    '<div class="stb2">Use surfaces 1–2 as primary and secondary with given radii and conics; maintain distances from the LDE block.</div>'+
+    '<div class="pb2">M1: R='+s.R1.toFixed(3)+'  k='+s.K1.toFixed(4)+'  Aperture='+s.D1.toFixed(1)+'mm\n'+
+    'M2: R='+s.R2.toFixed(3)+'  k='+s.K2.toFixed(4)+'  Aperture='+s.m2d.toFixed(2)+'mm\n'+
+    'M1–M2 separation: '+s.d1.toFixed(3)+'mm</div></div>'+
+    '<div class="stp"><div class="stt">2. Add fold mirror as toroid</div>'+
+    '<div class="stb2">Tilted −45° about X. Use TOROIDAL surface type with Rt and Rs as given.</div>'+
+    '<div class="pb2">M3: Rt='+s.Rt.toFixed(4)+'mm  Rs='+s.Rs.toFixed(4)+'mm  clear='+Math.max(s.sx,s.sy).toFixed(2)+'mm</div></div>'+
+    (s.lensOn?
+      '<div class="stp"><div class="stt">3. Insert field corrector</div>'+
+      '<div class="stb2">Place singlet at distance '+(s.bfl-gv('lpos')).toFixed(2)+'mm before focus, using '+s.glass+'.</div>'+
+      '<div class="pb2">R1='+gv('lr1').toFixed(2)+'mm  R2='+(Math.abs(gv('lr2'))<0.5?'∞':gv('lr2').toFixed(2))+
+      'mm  CT='+gv('lct').toFixed(2)+'mm  Ø='+s.lens_dia.toFixed(1)+'mm</div></div>'
+      :'')+
+    '<div class="stp"><div class="stt">4. Optimise & compare</div>'+
+    '<div class="stb2">Check that the Zemax F/# and footprint match the app, then refine aspheric/toric terms if desired.</div>'+
+    '<div class="pb2">App F/# (eff) ≈ f/'+s.eff_ff.toFixed(3)+'\nApp native F/# ≈ f/'+s.nat_ff.toFixed(3)+'</div></div>';
+  document.getElementById('pit-t').innerHTML=
+    '<div class="stp"><div class="stt">Sign conventions</div>'+
+    '<div class="stb2">All radii follow the Zemax sign convention; concave mirrors face +Z, negative radius.</div>'+
+    '<div class="wb">Do not mirror‑flip the system in OpticStudio; keep global axes consistent with the layout diagram.</div></div>'+
+    '<div class="stp"><div class="stt">Toroid alignment</div>'+
+    '<div class="stb2">The fold mirror tilt must be exactly −45° about X with the correct coordinate break before and after.</div>'+
+    '<div class="wb">Any change in tilt sign or order of CB surfaces will send the beam away from the image plane.</div></div>'+
+    '<div class="stp"><div class="stt">Lens glass</div>'+
+    '<div class="stb2">If the chosen glass is not available in your Zemax libraries, pick the closest nd/Vd pair.</div></div>';
+}
 </script>
 </body>
 </html>
