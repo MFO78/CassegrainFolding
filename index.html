@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cassegrain v8.2 (Autoscaling & Zoom)</title>
+<title>Cassegrain v8.4 (Zemax Export)</title>
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <style>
 :root{--bg:#121212;--panel:#1e1e1e;--accent:#00bcd4;--ah:#00acc1;--err:#cf6679;
@@ -35,9 +35,9 @@ h2{margin:0 0 10px;font-size:.7rem;opacity:.45;font-weight:normal;text-transform
 .ig label{display:block;font-size:.7rem;margin-bottom:2px;color:#888;}
 .ig input[type=number],.ig input[type=range],.ig select{width:100%;background:var(--ibg);
     border:1px solid #444;color:#fff;padding:6px 8px;border-radius:4px;
-    font-family:Consolas,monospace;font-size:14px;-webkit-appearance:none;}
+    font-family:Consolas,monospace;font-size:14px;-webkit-appearance:none; transition: all 0.3s;}
 .ig input[type=number]:focus,.ig select:focus{outline:none;border-color:var(--accent);}
-.ig input[type=number].calc-out{background:#1a1200;border-color:#664400;color:var(--calc);}
+.ig input[type=number].calc-out{background:#1a1200;border-color:#664400;color:var(--calc); box-shadow: 0 0 8px rgba(255, 152, 0, 0.4);}
 .ig input[type=range]{padding:0;height:32px;background:transparent;border:none;cursor:pointer;}
 .ig input[type=range]::-webkit-slider-runnable-track{background:#444;height:4px;border-radius:2px;}
 .ig input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;
@@ -85,6 +85,8 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--lens);cursor:poin
 .chips{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px;}
 .chip{background:#1a3a2a;border:1px solid #2a5a3a;border-radius:10px;padding:2px 7px;
       font-size:.63rem;color:var(--ok);font-family:Consolas,monospace;}
+
+/* ZEMAX MODAL CSS */
 .mbd{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;
      align-items:center;justify-content:center;padding:14px;}
 .mbd.open{display:flex;}
@@ -115,6 +117,13 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--lens);cursor:poin
      border-radius:4px;font-size:.73rem;cursor:pointer;}
 .cpb:hover{background:#2e2e2e;color:#fff;}
 .cpb.ok{background:#0a2a1a;border-color:var(--ok);color:var(--ok);}
+
+.stp{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #222;}
+.stp:last-child{border-bottom:none;}
+.stt{font-weight:700;color:var(--accent);margin-bottom:4px;font-size:.85rem;}
+.stb2{font-size:.76rem;color:#ccc;line-height:1.4;}
+.pb2{margin-top:6px;padding:8px;background:#111;border-left:2px solid #555;font-family:Consolas,monospace;font-size:.7rem;color:#aaa;white-space:pre;}
+.wb{margin-top:6px;padding:8px;background:#2a1111;border-left:2px solid var(--err);font-size:.73rem;color:#ff8a80;}
 </style>
 </head>
 <body>
@@ -122,7 +131,7 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--lens);cursor:poin
 <div class="sb" id="sb">
 <header>
   <h1>Cassegrain Optimiser</h1>
-  <div class="vtag">v8.2 · Autoscaling & Interactive Zoom</div>
+  <div class="vtag">v8.4 · Enhanced Zemax Export Modal</div>
   <h2>3D Vector Ray Trace Engine</h2>
 </header>
 
@@ -216,11 +225,12 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--lens);cursor:poin
     <div id="s2" class="spot-chart"></div>
     <div id="s3" class="spot-chart"></div>
   </div>
-  <div class="stb"><span id="stmsg">Ready</span><span>v8.2</span></div>
+  <div class="stb"><span id="stmsg">Ready</span><span>v8.4</span></div>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<!-- ZEMAX MODAL -->
 <div class="mbd" id="zmod" onclick="bdClick(event)">
   <div class="mdl">
     <div class="mhd">
@@ -229,13 +239,17 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--lens);cursor:poin
     </div>
     <div class="si" id="zsi"></div>
     <div class="tbar">
-      <button class="tb act" onclick="swTab('lde',this)">LDE</button>
+      <button class="tb act" onclick="swTab('lde',this)">LDE Data</button>
+      <button class="tb" onclick="swTab('set',this)">Setup Guide</button>
+      <button class="tb" onclick="swTab('pit',this)">Pitfalls</button>
     </div>
     <div class="tc">
       <div class="tp act" id="tp-lde">
         <div class="lde" id="lde-t"></div>
         <div class="cbr"><button class="cpb" onclick="cpy('lde-t',this)">Copy LDE</button></div>
       </div>
+      <div class="tp" id="tp-set"></div>
+      <div class="tp" id="tp-pit"></div>
     </div>
   </div>
 </div>
@@ -601,10 +615,15 @@ function optimiseCorrectorUI(){
            }
         }
         
-        // Final UI push
+        // Final UI push with visual highlight
         for(let i=0; i<4; i++){
             let c = bestC[i];
-            document.getElementById('lr'+(i+1)).value = (Math.abs(c)>1e-8 ? (1/c) : 1e9).toFixed(3);
+            let inputField = document.getElementById('lr'+(i+1));
+            inputField.value = (Math.abs(c)>1e-8 ? (1/c) : 1e9).toFixed(3);
+            
+            // Trigger visual flash
+            inputField.classList.add('calc-out');
+            setTimeout(() => inputField.classList.remove('calc-out'), 2500);
         }
         toast('Adam Optimisation complete!');
         RUN(); // Re-render
@@ -658,10 +677,11 @@ function buildRes(s){
   
   let lBlock = '';
   if(s.corrector){
-      lBlock = `<div class="srh">Corrector</div>`+
+      lBlock = `<div class="srh">Corrector Parameters</div>`+
                mr('G1/G2', s.corrector.g1+' / '+s.corrector.g2, 'vi')+
-               mr('R1/R2', gv('lr1').toFixed(1)+' / '+gv('lr2').toFixed(1))+
-               mr('R3/R4', gv('lr3').toFixed(1)+' / '+gv('lr4').toFixed(1));
+               mr('R1/R2', gv('lr1').toFixed(3)+' / '+gv('lr2').toFixed(3))+
+               mr('R3/R4', gv('lr3').toFixed(3)+' / '+gv('lr4').toFixed(3))+
+               mr('CT1/Gap/CT2', gv('lct1').toFixed(2)+' / '+gv('lgap').toFixed(2)+' / '+gv('lct2').toFixed(2));
   }
   
   document.getElementById('res').innerHTML=
@@ -770,24 +790,71 @@ function plotSpots(s){
 }
 
 /* ZEMAX EXPORT */
+function swTab(t, b) {
+  document.querySelectorAll('.tb').forEach(el => el.classList.remove('act'));
+  b.classList.add('act');
+  document.querySelectorAll('.tp').forEach(el => el.classList.remove('act'));
+  document.getElementById('tp-' + t).classList.add('act');
+}
+
 function openZ(){
     document.getElementById('zmod').classList.add('open');
-    let s=SOL, txt=`OBJ Standard Infinity Infinity\n1 Standard ${s.R1.toFixed(3)} ${(-s.d1).toFixed(3)} MIRROR\n2 Standard ${s.R2.toFixed(3)} ${(s.zm3+s.d1).toFixed(3)} MIRROR\n`;
-    txt+=`3 Coordinate Infinity 0 Tilt/Dec 0\n   Tilt X -45.0\n4 Toroidal ${s.tor.Rt.toFixed(4)} 0 MIRROR\n   Par1 ${s.tor.Rs.toFixed(4)}\n5 Coordinate Infinity 0 Undo tilt 0\n`;
+    let s=SOL;
+    
+    // Header Info
+    document.getElementById('zsi').innerHTML = 
+        `<div class="sc">EFL <span>${(s.EFL_eff/1000).toFixed(3)}m</span></div>` +
+        `<div class="sc">F/# <span>${s.eff_ff.toFixed(2)}</span></div>` +
+        `<div class="sc">Wav <span>${s.lnm}nm</span></div>`;
+        
+    // LDE Format Generator
+    let txt=`! Cassegrain Optimiser v8.4 Export\nOBJ Standard Infinity Infinity\n`;
+    txt+=`1 Standard ${s.R1.toFixed(3)} ${(-s.d1).toFixed(3)} MIRROR\n   Conic ${s.K1.toFixed(4)}\n`;
+    txt+=`2 Standard ${s.R2.toFixed(3)} ${(s.zm3+s.d1).toFixed(3)} MIRROR\n   Conic ${s.K2.toFixed(4)}\n`;
+    txt+=`3 Coordinate Break 0 0\n   Tilt X -45.0\n`;
+    txt+=`4 Toroidal ${s.tor.Rt.toFixed(4)} 0 MIRROR\n   Radius of Rotation ${s.tor.Rs.toFixed(4)}\n`;
+    txt+=`5 Coordinate Break 0 0\n   Tilt X -45.0\n`;
+    
     if(s.corrector){
-        let th = [gv('lct1'), gv('lgap'), gv('lct2'), s.bfl-gv('lpos')], gl = [s.corrector.g1, '', s.corrector.g2, ''];
-        txt+= `6 Standard Infinity ${(s.bfl-gv('lpos')).toFixed(3)} \n`;
-        for(let i=0; i<4; i++){
-            let r = s.corrector.surfaces[i].c === 0 ? 'Infinity' : (1/s.corrector.surfaces[i].c).toFixed(3);
-            txt+= `${7+i} Standard ${r} ${th[i].toFixed(3)} ${gl[i]}\n`;
-        }
+        let lpos = gv('lpos'), ct1 = gv('lct1'), gap = gv('lgap'), ct2 = gv('lct2');
+        let d_to_lens = s.bfl - lpos;
+        txt+= `6 Standard Infinity ${d_to_lens.toFixed(3)}\n`;
+        
+        let c1 = s.corrector.surfaces[0].c, r1 = Math.abs(c1) < 1e-8 ? 'Infinity' : (1/c1).toFixed(3);
+        let c2 = s.corrector.surfaces[1].c, r2 = Math.abs(c2) < 1e-8 ? 'Infinity' : (1/c2).toFixed(3);
+        let c3 = s.corrector.surfaces[2].c, r3 = Math.abs(c3) < 1e-8 ? 'Infinity' : (1/c3).toFixed(3);
+        let c4 = s.corrector.surfaces[3].c, r4 = Math.abs(c4) < 1e-8 ? 'Infinity' : (1/c4).toFixed(3);
+        
+        txt+= `7 Standard ${r1} ${ct1.toFixed(3)} ${s.corrector.g1}\n`;
+        txt+= `8 Standard ${r2} ${gap.toFixed(3)}\n`;
+        txt+= `9 Standard ${r3} ${ct2.toFixed(3)} ${s.corrector.g2}\n`;
+        let bfl_rem = lpos - ct1 - gap - ct2;
+        txt+= `10 Standard ${r4} ${bfl_rem.toFixed(3)}\n`;
         txt+= `11 Image Infinity 0`;
-    }else{ txt+= `6 Image Infinity ${s.bfl.toFixed(3)}`; }
+    } else {
+        txt+= `6 Image Infinity ${s.bfl.toFixed(3)}`;
+    }
     document.getElementById('lde-t').innerText=txt;
+    
+    // Setup Guide Generation
+    let setHTML = 
+        `<div class="stp"><div class="stt">1. Basic setup</div><div class="stb2">Set system aperture to Entrance Pupil Diameter = ${s.D1.toFixed(1)} mm. Add a single evaluation wavelength at ${s.lnm} nm.</div></div>` +
+        `<div class="stp"><div class="stt">2. Mirrors & Conics</div><div class="stb2">Input M1 and M2 radii and thicknesses. Ensure you set the explicit Conic constants (k) in the Lens Data Editor:</div><div class="pb2">M1 k = ${s.K1.toFixed(4)}\nM2 k = ${s.K2.toFixed(4)}</div></div>` +
+        `<div class="stp"><div class="stt">3. Toroidal Fold Mirror (M3)</div><div class="stb2">Set surface type to 'Toroidal'. The base radius represents the tangential radius (Rt). Expand the surface properties to input the 'Radius of Rotation' (Rs).</div><div class="pb2">Radius (Rt) = ${s.tor.Rt.toFixed(4)} mm\nRadius of Rotation (Rs) = ${s.tor.Rs.toFixed(4)} mm</div></div>`;
+        
+    if(s.corrector){
+        setHTML += `<div class="stp"><div class="stt">4. Doublet Corrector</div><div class="stb2">Add 4 standard sequential surfaces for the doublet. You must map your materials to the exact glass catalogues used to preserve dispersion characteristics.</div><div class="pb2">Glass 1 = ${s.corrector.g1}\nGlass 2 = ${s.corrector.g2}</div></div>`;
+    }
+    document.getElementById('tp-set').innerHTML = setHTML;
+    
+    // Pitfalls Generation
+    document.getElementById('tp-pit').innerHTML = 
+        `<div class="stp"><div class="stt">Sign conventions</div><div class="stb2">All radii follow the standard Zemax Cartesian sign convention. The concave primary faces +Z, and therefore mandates a negative radius. Thickness after reflection changes mathematical sign.</div><div class="wb">Do not arbitrarily flip thickness signs in Zemax; follow the LDE sequence strictly to maintain global coordinate integrity.</div></div>` +
+        `<div class="stp"><div class="stt">Coordinate Break Integrity</div><div class="stb2">The M3 fold mirror tilt must be exactly −45° about X with the correct Coordinate Break explicitly declared both before and after the surface.</div><div class="wb">A missing or mathematically inversed secondary coordinate break will instantly break optical continuity and skew rays outside the lens aperture.</div></div>`;
 }
+
 function closeZ(){document.getElementById('zmod').classList.remove('open');}
 function bdClick(e){if(e.target===e.currentTarget)closeZ();}
-function swTab(t,b){}
 function cpy(id,btn){ navigator.clipboard.writeText(document.getElementById(id).innerText); btn.textContent='Copied!'; setTimeout(()=>btn.textContent='Copy',2000); }
 
 </script>
